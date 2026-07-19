@@ -1,9 +1,9 @@
-# Baidu Chat API Configuration
+# Baidu2API Configuration
 # 不填 cookies 时会自动从 chat.baidu.com 首页获取
 
 [cookies]
-# 手动提供 Cookie 字符串（可选，留空则自动获取）
-# value = "BAIDUID=xxx; BIDUPSID=xxx; PSTM=xxx; ..."
+# value = "BAIDUID=xxx; BIDUPSID=xxx; ..."
+# values = ["...", "..."]
 value = ""
 
 [server]
@@ -11,36 +11,25 @@ host = "0.0.0.0"
 port = 8000
 
 [auth]
-# 公网部署建议配置一个或多个 sk- 开头的 API Key。
-# 留空表示不启用鉴权，保持本地开发兼容。
+# 公网部署建议配置 api_keys；留空表示不鉴权
 api_keys = []
-# api_keys = ["sk-your-secret-key"]
-
-[models]
-# Map OpenAI model names to Baidu models
-wenxin = "ernie-4.5"
-deepseek_r1 = "deepseek-r1"
-dsv4pro = "deepseek-v4-pro"
+# WebUI 管理员密钥（也可用环境变量 BAIDU2API_ADMIN_KEY）
+admin_key = "baidu2api"
+jwt_expire_hours = 24
 
 [headers]
-# Optional custom User-Agent
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 [cookie_persistence]
-# Cookie 自动持久化文件路径
 cookie_file = "cookies.json"
-# 是否自动保存获取到的 Cookie
 auto_save_cookies = true
 
 [context]
-# 每次请求都使用新的百度对话窗口，避免不同请求的服务端会话状态串线。
 fresh_conversation = true
-# 本地压缩 OpenAI messages 后再发给百度，避免长上下文拖慢或混乱。
 max_chars = 12000
 max_messages = 16
 max_message_chars = 2000
 
 [options]
-# Default settings
-default_model = "ernie-4.5"
+default_model = "deepseek-v4-flash"
 stream = true

@@ -1,11 +1,17 @@
 services:
-  wenxin2api:
+  baidu2api:
     build: .
-    image: wenxin2api:latest
-    container_name: wenxin2api
+    image: baidu2api:latest
+    container_name: baidu2api
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
-      - "8000:8000"
+      - "${BAIDU2API_HOST_PORT:-8000}:8000"
     volumes:
-      - ./config.toml:/app/config.toml:ro
+      - ./config.toml:/app/config.toml
       - ./cookies.json:/app/cookies.json
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - PORT=8000
+      - BAIDU2API_ADMIN_KEY=${BAIDU2API_ADMIN_KEY:-baidu2api}

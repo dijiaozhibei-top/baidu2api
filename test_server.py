@@ -72,7 +72,7 @@ def test_flask_server():
 
         # Test 2: POST sync
         r = tc.post("/v1/chat/completions",
-                    json={"model": "baidu-smart", "messages": [{"role": "user", "content": "hello"}], "stream": False})
+                    json={"model": "smartmode", "messages": [{"role": "user", "content": "hello"}], "stream": False})
         data = r.get_json()
         msg = data.get("choices", [{}])[0].get("message", {})
         results.append({
@@ -84,7 +84,7 @@ def test_flask_server():
 
         # Test 3: POST stream
         r = tc.post("/v1/chat/completions",
-                    json={"model": "baidu-smart", "messages": [{"role": "user", "content": "hello"}], "stream": True})
+                    json={"model": "smartmode", "messages": [{"role": "user", "content": "hello"}], "stream": True})
         raw = r.data.decode("utf-8")
         lines = [ln for ln in raw.strip().split("\n") if ln.startswith("data: ")]
         chunks = []
@@ -113,7 +113,7 @@ def test_flask_server():
 
         # Test 4: DeepSeek model
         r = tc.post("/v1/chat/completions",
-                    json={"model": "baidu-deepseek", "messages": [{"role": "user", "content": "hello"}], "stream": False})
+                    json={"model": "deepseek-r1", "messages": [{"role": "user", "content": "hello"}], "stream": False})
         data = r.get_json()
         msg = data.get("choices", [{}])[0].get("message", {})
         results.append({
@@ -138,7 +138,7 @@ def test_flask_server():
         }]
         r = tc.post("/v1/chat/completions",
                     json={
-                        "model": "baidu-smart",
+                        "model": "smartmode",
                         "messages": [{"role": "user", "content": "北京天气"}],
                         "tools": tools,
                         "tool_choice": {"type": "function", "function": {"name": "get_weather"}},
@@ -157,7 +157,7 @@ def test_flask_server():
 
         # Test 6: Tool calling stream
         r = tc.post("/v1/chat/completions",
-                    json={"model": "baidu-smart", "messages": [{"role": "user", "content": "北京天气"}], "tools": tools, "stream": True})
+                    json={"model": "smartmode", "messages": [{"role": "user", "content": "北京天气"}], "tools": tools, "stream": True})
         raw = r.data.decode("utf-8")
         tool_delta = None
         finish_reason = None

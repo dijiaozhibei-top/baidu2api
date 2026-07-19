@@ -5,9 +5,10 @@ import json
 from typing import Optional, Dict, Any
 
 from flask import Flask, request, jsonify, Response
-from baidu_chat import _log
+from baidu_chat import _log, BaiduChatClient
 from client_pool import BaiduClientPool
 from tool_calling import messages_to_prompt, parse_tool_calls
+from admin_api import admin_state, register_admin_routes
 
 
 # ------------------------------------------------------------------
@@ -39,7 +40,7 @@ def load_config(path: str = "config.toml") -> Dict[str, Any]:
 # Flask App
 # ------------------------------------------------------------------
 app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = True
+app.config["JSON_AS_ASCII"] = True
 client: Optional[BaiduClientPool] = None
 api_keys: set[str] = set()
 context_options: Dict[str, Any] = {
@@ -47,37 +48,64 @@ context_options: Dict[str, Any] = {
     "context_max_messages": 16,
     "context_max_message_chars": 2000,
 }
+extra_model_aliases: Dict[str, str] = {}
 
 
-MODEL_LIST = [
-    {"id": "baidu-ernie-4.5", "object": "model", "created": int(time.time()), "owned_by": "baidu"},
-    {"id": "baidu-ernie-4.5-think", "object": "model", "created": int(time.time()), "owned_by": "baidu"},
-    {"id": "baidu-deepseek-r1", "object": "model", "created": int(time.time()), "owned_by": "baidu"},
-    {"id": "baidu-deepseek-r1-think", "object": "model", "created": int(time.time()), "owned_by": "baidu"},
-    {"id": "baidu-deepseek-v4-pro", "object": "model", "created": int(time.time()), "owned_by": "baidu"},
-    {"id": "baidu-deepseek-v4-pro-think", "object": "model", "created": int(time.time()), "owned_by": "baidu"},
+# Canonical public model ids (aligned with chat.baidu.com usableModel, 2026-07)
+CANONICAL_MODELS = [
+    "deepseek-r1",
+    "deepseek-v4-pro",
+    "deepseek-v4-pro-nothinking",
+    "deepseek-v4-flash",
+    "deepseek-v4-flash-nothinking",
+    "ernie-5.1",
+    "ernie-5.1-nothinking",
+    "smartmode",
+    "smartmode-thinking",
 ]
 
+# Also expose exact Baidu-cased ids the user listed
+PUBLIC_MODEL_IDS = CANONICAL_MODELS + [
+    "ERINE-5.1",
+    "ERINE-5.1-nothinking",
+]
+
+MODEL_LIST = [
+    {"id": mid, "object": "model", "created": int(time.time()), "owned_by": "baidu"}
+    for mid in PUBLIC_MODEL_IDS
+]
+
+# Map public / alias names -> internal BaiduChatClient keys
 MODEL_MAP = {
-    "baidu-ernie-4.5": "ernie-4.5",
-    "baidu-ernie-4.5-think": "ernie-4.5-think",
-    "baidu-wenxin": "ernie-4.5",
-    "baidu-wenxin-think": "ernie-4.5-think",
-    "baidu-smart": "ernie-4.5",
-    "baidu-smart-think": "ernie-4.5-think",
+    "deepseek-r1": "deepseek-r1",
+    "deepseek-v4-pro": "deepseek-v4-pro",
+    "deepseek-v4-pro-nothinking": "deepseek-v4-pro-nothinking",
+    "deepseek-v4-flash": "deepseek-v4-flash",
+    "deepseek-v4-flash-nothinking": "deepseek-v4-flash-nothinking",
+    "ernie-5.1": "ernie-5.1",
+    "ernie-5.1-nothinking": "ernie-5.1-nothinking",
+    "ERINE-5.1": "ernie-5.1",
+    "ERINE-5.1-nothinking": "ernie-5.1-nothinking",
+    "smartmode": "smartmode",
+    "smartmode-thinking": "smartmode-thinking",
     "baidu-deepseek-r1": "deepseek-r1",
-    "baidu-deepseek-r1-think": "deepseek-r1-think",
-    "baidu-deepseek": "deepseek-r1",
-    "baidu-deepseek-think": "deepseek-r1-think",
     "baidu-deepseek-v4-pro": "deepseek-v4-pro",
-    "baidu-deepseek-v4-pro-think": "deepseek-v4-pro-think",
-    "baidu-dsv4pro": "deepseek-v4-pro",
-    "baidu-dsv4pro-think": "deepseek-v4-pro-think",
+    "baidu-deepseek-v4-pro-nothinking": "deepseek-v4-pro-nothinking",
+    "baidu-deepseek-v4-flash": "deepseek-v4-flash",
+    "baidu-deepseek-v4-flash-nothinking": "deepseek-v4-flash-nothinking",
+    "baidu-ernie-5.1": "ernie-5.1",
+    "baidu-ernie-5.1-nothinking": "ernie-5.1-nothinking",
+    "baidu-smartmode": "smartmode",
+    "baidu-smartmode-thinking": "smartmode-thinking",
+    "baidu-smart": "smartmode",
+    "baidu-deepseek": "deepseek-r1",
     "baidu-ds-v4": "deepseek-v4-pro",
-    "baidu-ds-v4-think": "deepseek-v4-pro-think",
-    "gpt-3.5-turbo": "ernie-4.5",
-    "gpt-4": "deepseek-r1",
+    "baidu-dsv4pro": "deepseek-v4-pro",
+    "baidu-ds-v4-flash": "deepseek-v4-flash",
+    "gpt-3.5-turbo": "deepseek-v4-flash",
+    "gpt-4": "deepseek-v4-pro",
     "gpt-4-turbo": "deepseek-v4-pro",
+    "gpt-4o": "deepseek-v4-flash",
 }
 
 
@@ -90,6 +118,11 @@ def _resolve_server_config(config: Dict[str, Any], host: str, port: int) -> tupl
     if isinstance(server_cfg, dict):
         host = server_cfg.get("host", host)
         port = int(server_cfg.get("port", port))
+    host = os.environ.get("BAIDU2API_HOST", host)
+    if os.environ.get("PORT"):
+        port = int(os.environ["PORT"])
+    elif os.environ.get("BAIDU2API_PORT"):
+        port = int(os.environ["BAIDU2API_PORT"])
     return host, port
 
 
@@ -146,7 +179,41 @@ def _resolve_api_keys(config: Dict[str, Any]) -> set[str]:
     return {str(key).strip() for key in configured if str(key).strip()}
 
 
+def _resolve_admin_key(config: Dict[str, Any]) -> str:
+    env_key = os.environ.get("BAIDU2API_ADMIN_KEY") or os.environ.get("ADMIN_KEY")
+    if env_key:
+        return env_key
+    auth_cfg = config.get("auth", {})
+    if isinstance(auth_cfg, dict) and auth_cfg.get("admin_key"):
+        return str(auth_cfg["admin_key"])
+    return "baidu2api"
+
+
+def _resolve_model(model: str) -> str:
+    if not model:
+        return "deepseek-v4-flash"
+    if model in MODEL_MAP:
+        return MODEL_MAP[model]
+    if model in extra_model_aliases:
+        return extra_model_aliases[model]
+    lower = {k.lower(): v for k, v in MODEL_MAP.items()}
+    if model.lower() in lower:
+        return lower[model.lower()]
+    alias_lower = {k.lower(): v for k, v in extra_model_aliases.items()}
+    if model.lower() in alias_lower:
+        return alias_lower[model.lower()]
+    if model in BaiduChatClient.MODELS:
+        return model
+    if model.lower() in {k.lower() for k in BaiduChatClient.MODELS}:
+        return next(k for k in BaiduChatClient.MODELS if k.lower() == model.lower())
+    return "deepseek-v4-flash"
+
+
 def _check_auth():
+    path = request.path or ""
+    if path.startswith("/admin") or path in ("/healthz", "/readyz"):
+        return None
+
     if not api_keys:
         return None
 
@@ -178,13 +245,13 @@ def chat_completions():
     if not req:
         return _error("Invalid JSON body")
 
-    model = req.get("model", "baidu-ernie-4.5")
+    model = req.get("model", "deepseek-v4-flash")
     messages = req.get("messages", [])
     tools = req.get("tools") or []
     tool_choice = req.get("tool_choice")
     stream = req.get("stream", False)
 
-    baidu_model = MODEL_MAP.get(model, "ernie-4.5")
+    baidu_model = _resolve_model(model)
     deep_search = bool(req.get("deep_search", False))
     query = messages_to_prompt(
         messages,
@@ -198,13 +265,16 @@ def chat_completions():
     if not query:
         return _error("No user message found")
 
-    _log("INFO", f"POST /v1/chat/completions  model={model}  stream={stream}  tools={len(tools) if isinstance(tools, list) else 0}  query_len={len(query)}")
+    _log(
+        "INFO",
+        f"POST /v1/chat/completions  model={model}->{baidu_model}  stream={stream}  "
+        f"tools={len(tools) if isinstance(tools, list) else 0}  query_len={len(query)}",
+    )
 
     has_tools = isinstance(tools, list) and bool(tools)
     if stream:
         return _handle_stream(query, baidu_model, deep_search, model, has_tools)
-    else:
-        return _handle_sync(query, baidu_model, deep_search, model)
+    return _handle_sync(query, baidu_model, deep_search, model)
 
 
 def _handle_stream(query: str, baidu_model: str, deep_search: bool, display_model: str, has_tools: bool = False):
@@ -225,7 +295,6 @@ def _handle_stream(query: str, baidu_model: str, deep_search: bool, display_mode
 
         try:
             content_parts = []
-            reasoning_parts = []
             for chunk in client.chat_to_openai_chunks(query, model=baidu_model, deep_search=deep_search):
                 content = chunk.get("content")
                 if not content:
@@ -245,7 +314,6 @@ def _handle_stream(query: str, baidu_model: str, deep_search: bool, display_mode
                             }],
                         })
                 elif chunk["type"] == "reasoning_content":
-                    reasoning_parts.append(content)
                     yield _sse({
                         "id": "chatcmpl-baidu",
                         "object": "chat.completion.chunk",
@@ -312,7 +380,7 @@ def _handle_stream(query: str, baidu_model: str, deep_search: bool, display_mode
                 })
         except Exception as e:
             _log("ERROR", f"Stream error: {e}")
-            yield _sse({"error": str(e)})
+            yield _sse({"error": {"message": str(e), "type": "internal_error"}})
             return
 
         yield _sse({
@@ -360,11 +428,29 @@ def _handle_sync(query: str, baidu_model: str, deep_search: bool, display_model:
         return jsonify({"error": {"message": str(e), "type": "internal_error"}}), 500
 
 
-# ------------------------------------------------------------------
-# Startup
-# ------------------------------------------------------------------
-def run_server(host: str = "0.0.0.0", port: int = 8000, config: Optional[Dict[str, Any]] = None):
-    global client, api_keys, context_options
+def _reload_runtime_from_admin():
+    """Called when admin WebUI changes config."""
+    global client, api_keys, context_options, extra_model_aliases
+    with admin_state.lock:
+        api_keys = set(admin_state.api_keys)
+        context_options = {
+            "context_max_chars": admin_state.context_max_chars,
+            "context_max_messages": admin_state.context_max_messages,
+            "context_max_message_chars": admin_state.context_max_message_chars,
+        }
+        extra_model_aliases = dict(admin_state.model_aliases)
+        client = BaiduClientPool(
+            cookie_values=list(admin_state.cookie_values),
+            user_agent=admin_state.user_agent,
+            cookie_file=admin_state.cookie_file,
+            auto_save_cookies=admin_state.auto_save_cookies,
+            fresh_conversation=admin_state.fresh_conversation,
+        )
+    _log("INFO", f"Runtime reloaded from admin: keys={len(api_keys)} cookies={len(admin_state.cookie_values)}")
+
+
+def run_server(host: str = "0.0.0.0", port: int = 8000, config: Optional[Dict[str, Any]] = None, config_path: str = "config.toml"):
+    global client, api_keys, context_options, extra_model_aliases
     config = config or {}
 
     host, port = _resolve_server_config(config, host, port)
@@ -375,6 +461,8 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, config: Optional[Dict[st
         "context_max_messages": client_cfg["context_max_messages"],
         "context_max_message_chars": client_cfg["context_max_message_chars"],
     }
+    models_cfg = config.get("models") if isinstance(config.get("models"), dict) else {}
+    extra_model_aliases = {str(k): str(v) for k, v in (models_cfg or {}).items()}
 
     client = BaiduClientPool(
         cookie_values=client_cfg["cookie_values"],
@@ -384,16 +472,41 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, config: Optional[Dict[st
         fresh_conversation=bool(client_cfg["fresh_conversation"]),
     )
 
+    admin_cfg = config.get("auth", {}) if isinstance(config.get("auth"), dict) else {}
+    admin_state.configure(
+        config_path=config_path,
+        admin_key=_resolve_admin_key(config),
+        jwt_expire_hours=int(admin_cfg.get("jwt_expire_hours") or 24),
+        api_keys=list(api_keys),
+        cookie_values=client_cfg["cookie_values"],
+        user_agent=client_cfg["user_agent"],
+        cookie_file=client_cfg["cookie_file"],
+        auto_save_cookies=bool(client_cfg["auto_save_cookies"]),
+        fresh_conversation=bool(client_cfg["fresh_conversation"]),
+        context_max_chars=client_cfg["context_max_chars"],
+        context_max_messages=client_cfg["context_max_messages"],
+        context_max_message_chars=client_cfg["context_max_message_chars"],
+        model_aliases=extra_model_aliases,
+        version="0.2.0",
+        on_config_changed=_reload_runtime_from_admin,
+    )
+    register_admin_routes(app)
+
     _log("INFO", f"Flask server starting at http://{host}:{port}")
-    cookie_mode = f"user-provided pool={len(client_cfg['cookie_values'])}" if client_cfg["cookie_values"] else f"auto-fetch + file={client_cfg['cookie_file']}"
+    cookie_mode = (
+        f"user-provided pool={len(client_cfg['cookie_values'])}"
+        if client_cfg["cookie_values"]
+        else f"auto-fetch + file={client_cfg['cookie_file']}"
+    )
     _log("INFO", f"Cookie mode: {cookie_mode}")
     _log("INFO", f"Auth: {'enabled' if api_keys else 'disabled'}")
-    _log("INFO", "Models: baidu-ernie-4.5[-think], baidu-deepseek-r1[-think], baidu-deepseek-v4-pro[-think]")
+    _log("INFO", f"Admin WebUI: http://{host}:{port}/admin")
+    _log("INFO", "Models: " + ", ".join(CANONICAL_MODELS))
     app.run(host=host, port=port, threaded=True, debug=False)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Baidu Chat OpenAI-compatible API server (Flask)")
+    parser = argparse.ArgumentParser(description="Baidu2API OpenAI-compatible server (Flask)")
     parser.add_argument("--host", default="0.0.0.0", help="Server host")
     parser.add_argument("--port", type=int, default=8000, help="Server port")
     parser.add_argument("--config", default="config.toml", help="Config file path")
@@ -401,4 +514,4 @@ if __name__ == "__main__":
 
     cfg = load_config(args.config)
     host, port = _resolve_server_config(cfg, args.host, args.port)
-    run_server(host=host, port=port, config=cfg)
+    run_server(host=host, port=port, config=cfg, config_path=args.config)

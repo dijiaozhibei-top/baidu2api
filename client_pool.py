@@ -50,7 +50,7 @@ class BaiduClientPool:
     def chat_to_openai_chunks(
         self,
         query: str,
-        model: str = "ernie-4.5",
+        model: str = "deepseek-v4-flash",
         deep_search: bool = False,
         internet_search: bool = False,
     ) -> Generator[Dict[str, str], None, None]:
@@ -77,7 +77,7 @@ class BaiduClientPool:
     def chat_to_openai_sync(
         self,
         query: str,
-        model: str = "ernie-4.5",
+        model: str = "deepseek-v4-flash",
         deep_search: bool = False,
         internet_search: bool = False,
     ) -> Dict[str, Any]:

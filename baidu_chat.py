@@ -64,52 +64,179 @@ class BaiduChatClient:
     BASE_URL = "https://chat.baidu.com"
     CONVERSATION_API = f"{BASE_URL}/aichat/api/conversation"
 
+    # Captured 2026-07-19 from chat.baidu.com usableModel:
+    # smartMode, DeepSeek-V4, DeepSeek-V4-Flash, DeepSeek-R1, ERINE-5.1
+    # deepSearch / thinkMode.status control thinking variants.
     MODELS = {
-        "ernie-4.5": {
-            "usedModel": {"modelName": "ERINE-4.5", "modelFunction": {"deepSearch": "0", "internetSearch": "0"}},
-            "enter_type": "sidebar_dialog",
-            "agt_sess_cnt": 0,
-            "anti_ext": {"inputT": None, "ck1": 87, "ck9": 353, "ck10": 351},
-            "rank": 1,
-        },
         "deepseek-r1": {
             "usedModel": {
                 "modelName": "DeepSeek-R1",
-                "modelFunction": {"deepSearch": "0", "internetSearch": "0"},
+                "modelFunction": {
+                    "internetSearch": "1",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "1", "disabled": True, "disabledTip": ""},
+                },
                 "showModelName": "DeepSeek-R1",
             },
             "enter_type": "sidebar_dialog",
             "agt_sess_cnt": 0,
             "anti_ext": {"inputT": None, "ck1": 111, "ck9": 450, "ck10": 346},
             "rank": 1,
+            "force_thinking": True,
         },
         "deepseek-v4-pro": {
             "usedModel": {
                 "modelName": "DeepSeek-V4",
-                "modelFunction": {"deepSearch": "0", "internetSearch": "0"},
-                "showModelName": "DeepSeek-V4",
+                "modelFunction": {
+                    "internetSearch": "1",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "1", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "DeepSeek-V4 Pro",
             },
             "enter_type": "chat_url",
             "agt_sess_cnt": 1,
             "anti_ext": {"inputT": None, "ck1": 117, "ck9": 590, "ck10": 329},
             "rank": 1,
         },
+        "deepseek-v4-pro-nothinking": {
+            "usedModel": {
+                "modelName": "DeepSeek-V4",
+                "modelFunction": {
+                    "internetSearch": "1",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "0", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "DeepSeek-V4 Pro",
+            },
+            "enter_type": "chat_url",
+            "agt_sess_cnt": 1,
+            "anti_ext": {"inputT": None, "ck1": 117, "ck9": 590, "ck10": 329},
+            "rank": 1,
+        },
+        "deepseek-v4-flash": {
+            "usedModel": {
+                "modelName": "DeepSeek-V4-Flash",
+                "modelFunction": {
+                    "internetSearch": "",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "1", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "DeepSeek-V4 Flash",
+            },
+            "enter_type": "chat_url",
+            "agt_sess_cnt": 1,
+            "anti_ext": {"inputT": None, "ck1": 117, "ck9": 590, "ck10": 329},
+            "rank": 1,
+        },
+        "deepseek-v4-flash-nothinking": {
+            "usedModel": {
+                "modelName": "DeepSeek-V4-Flash",
+                "modelFunction": {
+                    "internetSearch": "",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "0", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "DeepSeek-V4 Flash",
+            },
+            "enter_type": "chat_url",
+            "agt_sess_cnt": 1,
+            "anti_ext": {"inputT": None, "ck1": 117, "ck9": 590, "ck10": 329},
+            "rank": 1,
+        },
+        "ernie-5.1": {
+            "usedModel": {
+                "modelName": "ERINE-5.1",
+                "modelFunction": {
+                    "internetSearch": "1",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "1", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "文心5.1",
+            },
+            "enter_type": "sidebar_dialog",
+            "agt_sess_cnt": 0,
+            "anti_ext": {"inputT": None, "ck1": 87, "ck9": 353, "ck10": 351},
+            "rank": 1,
+        },
+        "ernie-5.1-nothinking": {
+            "usedModel": {
+                "modelName": "ERINE-5.1",
+                "modelFunction": {
+                    "internetSearch": "1",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "0", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "文心5.1",
+            },
+            "enter_type": "sidebar_dialog",
+            "agt_sess_cnt": 0,
+            "anti_ext": {"inputT": None, "ck1": 87, "ck9": 353, "ck10": 351},
+            "rank": 1,
+        },
+        "smartmode": {
+            "usedModel": {
+                "modelName": "smartMode",
+                "modelFunction": {
+                    "internetSearch": "0",
+                    "deepSearch": "0",
+                    "thinkMode": {"status": "0", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "智能模式",
+            },
+            "enter_type": "sidebar_dialog",
+            "agt_sess_cnt": 0,
+            "anti_ext": {"inputT": None, "ck1": 87, "ck9": 353, "ck10": 351},
+            "rank": 1,
+        },
+        "smartmode-thinking": {
+            "usedModel": {
+                "modelName": "smartMode",
+                "modelFunction": {
+                    "internetSearch": "0",
+                    "deepSearch": "1",
+                    "thinkMode": {"status": "1", "disabled": False, "disabledTip": ""},
+                },
+                "showModelName": "智能模式",
+            },
+            "enter_type": "sidebar_dialog",
+            "agt_sess_cnt": 0,
+            "anti_ext": {"inputT": None, "ck1": 864, "ck9": 382, "ck10": 836},
+            "rank": 2,
+        },
     }
     THINK_OVERRIDES = {
-        "usedModel": {"modelName": "smartMode", "modelFunction": {"deepSearch": "1", "internetSearch": "0"}},
+        "usedModel": {
+            "modelName": "smartMode",
+            "modelFunction": {
+                "deepSearch": "1",
+                "internetSearch": "0",
+                "thinkMode": {"status": "1", "disabled": False, "disabledTip": ""},
+            },
+        },
         "enter_type": "sidebar_dialog",
         "agt_sess_cnt": 0,
         "anti_ext": {"inputT": None, "ck1": 864, "ck9": 382, "ck10": 836},
         "rank": 2,
     }
     MODEL_ALIASES = {
-        "smart": "ernie-4.5",
-        "ernie": "ernie-4.5",
-        "wenxin": "ernie-4.5",
+        "smart": "smartmode",
+        "smart-mode": "smartmode",
+        "smartmode-think": "smartmode-thinking",
+        "smartmode-thinking": "smartmode-thinking",
+        "ernie": "ernie-5.1",
+        "ernie-5.1": "ernie-5.1",
+        "erine-5.1": "ernie-5.1",
+        "ERINE-5.1": "ernie-5.1",
+        "ERINE-5.1-nothinking": "ernie-5.1-nothinking",
+        "wenxin": "ernie-5.1",
+        "wenxin-5.1": "ernie-5.1",
         "deepseek": "deepseek-r1",
         "ds-r1": "deepseek-r1",
         "ds-v4": "deepseek-v4-pro",
         "dsv4pro": "deepseek-v4-pro",
+        "ds-v4-flash": "deepseek-v4-flash",
+        "dsv4flash": "deepseek-v4-flash",
     }
 
     def __init__(self, cookies: Optional[str] = None, user_agent: Optional[str] = None,
@@ -275,22 +402,34 @@ class BaiduChatClient:
         return f"{b64}-{self._lid}-3"
 
     def _model_spec(self, model: str) -> Dict[str, Any]:
-        think = model.endswith("-think")
-        base_model = model[:-6] if think else model
+        raw = (model or "deepseek-v4-flash").strip()
+        # Support legacy -think suffix as thinking toggle for base models.
+        think_suffix = raw.endswith("-think") or raw.endswith("-thinking")
+        base_model = raw
+        if raw.endswith("-think"):
+            base_model = raw[:-6]
+        elif raw.endswith("-thinking") and raw not in self.MODELS:
+            base_model = raw[:-9]
+
         model_key = self.MODEL_ALIASES.get(base_model, base_model)
-        spec = copy.deepcopy(self.MODELS.get(model_key, self.MODELS["ernie-4.5"]))
-        if think:
-            if model_key == "ernie-4.5":
-                spec.update(copy.deepcopy(self.THINK_OVERRIDES))
-            else:
-                spec["rank"] = 2
-                spec["agt_sess_cnt"] = 0
-                spec["enter_type"] = "sidebar_dialog"
-                spec["anti_ext"] = copy.deepcopy(self.THINK_OVERRIDES["anti_ext"])
-                spec["usedModel"]["modelFunction"]["deepSearch"] = "1"
+        model_key = self.MODEL_ALIASES.get(model_key, model_key)
+        if model_key not in self.MODELS:
+            # Case-insensitive fallback
+            lower_map = {k.lower(): k for k in self.MODELS}
+            model_key = lower_map.get(model_key.lower(), "deepseek-v4-flash")
+
+        spec = copy.deepcopy(self.MODELS.get(model_key, self.MODELS["deepseek-v4-flash"]))
+        if think_suffix and not model_key.endswith("-nothinking") and model_key not in (
+            "deepseek-r1", "smartmode-thinking",
+        ):
+            mf = spec["usedModel"]["modelFunction"]
+            mf["deepSearch"] = "1"
+            if isinstance(mf.get("thinkMode"), dict):
+                mf["thinkMode"]["status"] = "1"
+            spec["rank"] = max(int(spec.get("rank") or 1), 2)
         return spec
 
-    def _build_message_payload(self, query: str, model: str = "ernie-4.5",
+    def _build_message_payload(self, query: str, model: str = "deepseek-v4-flash",
                                  deep_search: bool = False, internet_search: bool = False, rank: Optional[int] = None) -> Dict[str, Any]:
         spec = self._model_spec(model)
         model_cfg = spec["usedModel"]
@@ -298,8 +437,14 @@ class BaiduChatClient:
             rank = spec["rank"]
         if deep_search:
             model_cfg["modelFunction"]["deepSearch"] = "1"
+            if isinstance(model_cfg["modelFunction"].get("thinkMode"), dict):
+                model_cfg["modelFunction"]["thinkMode"]["status"] = "1"
         if internet_search:
             model_cfg["modelFunction"]["internetSearch"] = "1"
+        # Live client normalizes usedModel before POST:
+        # - thinkMode object -> string "0"/"1"
+        # - when thinkMode is present, internetSearch is omitted
+        model_cfg = self._normalize_used_model(model_cfg)
         chat_token = self._generate_chat_token(query)
         anti_ext = spec["anti_ext"]
         enter_type = spec["enter_type"]
@@ -334,6 +479,30 @@ class BaiduChatClient:
             "sa": "bkb", "setype": "csaitab", "rank": rank,
         }
 
+    def _normalize_used_model(self, used_model: Dict[str, Any]) -> Dict[str, Any]:
+        """Match chat.baidu.com normalizeUsedModelForRequest wire format."""
+        out = copy.deepcopy(used_model or {})
+        mf = out.get("modelFunction")
+        if not isinstance(mf, dict):
+            return out
+        think = mf.get("thinkMode")
+        if isinstance(think, dict):
+            status = think.get("status")
+            if status in (None, ""):
+                status = "0"
+            mf["thinkMode"] = str(status)
+            mf.pop("internetSearch", None)
+        elif think is not None:
+            mf["thinkMode"] = str(think)
+            mf.pop("internetSearch", None)
+        # Keep deepSearch as "0"/"1" strings
+        if "deepSearch" in mf and mf["deepSearch"] is not None:
+            mf["deepSearch"] = str(mf["deepSearch"])
+        if "internetSearch" in mf and mf["internetSearch"] is not None:
+            mf["internetSearch"] = str(mf["internetSearch"])
+        out["modelFunction"] = mf
+        return out
+
     def _build_headers(self, query: str, model: str, rank: int) -> Dict[str, str]:
         spec = self._model_spec(model)
         anti_ext = json.dumps(spec["anti_ext"], separators=(",", ":"))
@@ -343,7 +512,8 @@ class BaiduChatClient:
             f"anti_ext:{urllib.parse.quote(anti_ext)},"
             f"enter_type:{spec['enter_type']},re_rank:{rank},modelName:{model_name},sa:bkb"
         )
-        is_deepseek = "1" if model_name.startswith("DeepSeek") else "0"
+        # Live client sets isDeepseek="1" for any selected modelName
+        is_deepseek = "1" if model_name else "0"
         return {
             **self._headers, "Content-Type": "application/json",
             "X-Chat-Message": x_chat_msg, "isDeepseek": is_deepseek,
@@ -389,7 +559,7 @@ class BaiduChatClient:
                     yield {"event": event_type, "data": data}
         _log("DEBUG", f"SSE parser exited after {event_count} events")
 
-    def chat(self, query: str, model: str = "ernie-4.5", deep_search: bool = False,
+    def chat(self, query: str, model: str = "deepseek-v4-flash", deep_search: bool = False,
              internet_search: bool = False, rank: Optional[int] = None) -> Generator[Dict[str, Any], None, None]:
         self._ensure_cookies()
         if not self._token or not self._lid:
@@ -436,7 +606,7 @@ class BaiduChatClient:
         yield from self._parse_sse(resp)
         _log("BAIDU", "SSE stream ended normally")
 
-    def chat_stream_text(self, query: str, model: str = "ernie-4.5", deep_search: bool = False,
+    def chat_stream_text(self, query: str, model: str = "deepseek-v4-flash", deep_search: bool = False,
                            internet_search: bool = False) -> Generator[Dict[str, str], None, None]:
         msg_count = 0
         self._last_hint = None
@@ -526,7 +696,7 @@ class BaiduChatClient:
                 yield {"type": "ping", "content": ""}
         _log("DEBUG", f"chat_stream_text finished, total msg events={msg_count}")
 
-    def chat_to_openai_stream(self, query: str, model: str = "ernie-4.5", deep_search: bool = False,
+    def chat_to_openai_stream(self, query: str, model: str = "deepseek-v4-flash", deep_search: bool = False,
                                internet_search: bool = False) -> Generator[str, None, None]:
         chunk_count = 0
         for chunk in self.chat_to_openai_chunks(query, model, deep_search, internet_search):
@@ -535,7 +705,7 @@ class BaiduChatClient:
                 yield chunk["content"]
         _log("DEBUG", f"chat_to_openai_stream finished, text chunks={chunk_count}")
 
-    def chat_to_openai_chunks(self, query: str, model: str = "ernie-4.5", deep_search: bool = False,
+    def chat_to_openai_chunks(self, query: str, model: str = "deepseek-v4-flash", deep_search: bool = False,
                               internet_search: bool = False) -> Generator[Dict[str, str], None, None]:
         for chunk in self.chat_stream_text(query, model, deep_search, internet_search):
             ct = chunk["type"]
@@ -546,7 +716,7 @@ class BaiduChatClient:
             elif ct == "done":
                 break
 
-    def chat_to_openai_sync(self, query: str, model: str = "ernie-4.5", deep_search: bool = False,
+    def chat_to_openai_sync(self, query: str, model: str = "deepseek-v4-flash", deep_search: bool = False,
                              internet_search: bool = False) -> Dict[str, Any]:
         text_parts = []
         thinking_parts = []
@@ -574,11 +744,14 @@ if __name__ == "__main__":
     parser.add_argument("query", help="Chat query")
     parser.add_argument(
         "--model",
-        default="ernie-4.5",
+        default="deepseek-v4-flash",
         choices=[
-            "ernie-4.5", "deepseek-r1", "deepseek-v4-pro",
-            "ernie-4.5-think", "deepseek-r1-think", "deepseek-v4-pro-think",
-            "smart", "deepseek", "ds-v4",
+            "deepseek-r1",
+            "deepseek-v4-pro", "deepseek-v4-pro-nothinking",
+            "deepseek-v4-flash", "deepseek-v4-flash-nothinking",
+            "ernie-5.1", "ernie-5.1-nothinking",
+            "smartmode", "smartmode-thinking",
+            "smart", "deepseek", "ds-v4", "ds-v4-flash",
         ],
     )
     parser.add_argument("--deep-search", action="store_true")

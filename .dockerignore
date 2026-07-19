@@ -7,3 +7,7 @@ cookies.json
 cookies.*.json
 config/*.js
 uv.lock
+node_modules
+webui/node_modules
+.env
+*.md

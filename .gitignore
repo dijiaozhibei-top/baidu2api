@@ -10,3 +10,7 @@ wheels/
 .venv
 
 cookies.json
+cookies.*.json
+.env
+webui/node_modules/
+static/admin/
