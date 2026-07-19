@@ -240,9 +240,13 @@ class BaiduChatClient:
     }
 
     BASE_URLS = (
+        "https://www.baidu.com/",
         "https://chat.baidu.com",
         "https://wenxin.baidu.com/?enter_type=chat_site",
     )
+    # Browser guest chat succeeds with enter_type=chat_site + wenxin origin.
+    DEFAULT_ENTER_TYPE = "chat_site"
+    RISK_COOKIE_NAMES = ("BA_HECTOR", "ZFY")
 
     def __init__(self, cookies: Optional[str] = None, user_agent: Optional[str] = None,
                  cookie_file: Optional[str] = None, auto_save_cookies: bool = False):
@@ -265,12 +269,15 @@ class BaiduChatClient:
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
-            "Referer": "https://chat.baidu.com/",
-            "Origin": "https://chat.baidu.com",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Upgrade-Insecure-Requests": "1",
+            # Live PC chat posts from wenxin.baidu.com origin.
+            "Referer": "https://wenxin.baidu.com/",
+            "Origin": "https://wenxin.baidu.com",
+            "Sec-Ch-Ua": '"Chromium";v="120", "Not(A:Brand";v="24", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
         }
 
         if self._user_cookies:
@@ -294,14 +301,27 @@ class BaiduChatClient:
             part = part.strip()
             if "=" in part:
                 k, v = part.split("=", 1)
-                self.session.cookies.set(k.strip(), v.strip(), domain="chat.baidu.com", path="/")
-                self.session.cookies.set(k.strip(), v.strip(), domain=".baidu.com", path="/")
+                name, value = k.strip(), v.strip()
+                if not name:
+                    continue
+                # Risk cookies are host-scoped on .baidu.com in browser.
+                self.session.cookies.set(name, value, domain=".baidu.com", path="/")
+                self.session.cookies.set(name, value, domain="chat.baidu.com", path="/")
+                self.session.cookies.set(name, value, domain="wenxin.baidu.com", path="/")
 
     def _cookie_string(self) -> str:
-        items = []
+        # Deduplicate by cookie name (requests jar may hold multiple domains).
+        seen = {}
         for cookie in self.session.cookies:
-            items.append(f"{cookie.name}={cookie.value}")
-        return "; ".join(items)
+            seen[cookie.name] = cookie.value
+        return "; ".join(f"{k}={v}" for k, v in seen.items())
+
+    def _has_risk_cookies(self) -> bool:
+        names = {c.name for c in self.session.cookies}
+        return all(n in names for n in self.RISK_COOKIE_NAMES)
+
+    def _cookie_names(self) -> list[str]:
+        return sorted({c.name for c in self.session.cookies})
 
     def _save_cookies_to_file(self):
         if not self._cookie_file:
@@ -312,6 +332,8 @@ class BaiduChatClient:
                 "timestamp": int(time.time()),
                 "token": self._token,
                 "lid": self._lid,
+                "source": self._cookie_source,
+                "has_risk_cookies": self._has_risk_cookies(),
             }
             with open(self._cookie_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -342,7 +364,6 @@ class BaiduChatClient:
 
     def _refresh_cookies(self):
         _log("WARN", "Refreshing cookies (clearing old cookies)")
-        # Keep user-provided cookies if any; only clear auto/session jar.
         self.session.cookies.clear()
         self._token = None
         self._lid = None
@@ -364,21 +385,25 @@ class BaiduChatClient:
             self._refresh_cookies()
         else:
             self._ensure_cookies()
+        # Warn when risk cookies missing — guest chat usually needs BA_HECTOR/ZFY.
+        if not self._has_risk_cookies() and not self._user_cookies:
+            _log(
+                "WARN",
+                "Auto cookies missing BA_HECTOR/ZFY (browser risk cookies). "
+                "Guest chat may fail until these are present; paste full browser cookies if needed.",
+            )
         return self.cookie_status()
 
     def cookie_status(self) -> Dict[str, Any]:
         cookie_str = self._cookie_string()
-        names = []
-        for part in cookie_str.split(";"):
-            part = part.strip()
-            if "=" in part:
-                names.append(part.split("=", 1)[0].strip())
+        names = self._cookie_names()
         return {
             "source": self._cookie_source,
             "cookie_count": len(names),
             "cookie_names": names,
             "has_token": bool(self._token),
             "has_lid": bool(self._lid),
+            "has_risk_cookies": self._has_risk_cookies(),
             "cookie_string": cookie_str,
             "cookie_preview": (cookie_str[:80] + "...") if len(cookie_str) > 80 else cookie_str,
             "cookie_file": self._cookie_file or "",
@@ -534,9 +559,11 @@ class BaiduChatClient:
         # - when thinkMode is present, internetSearch is omitted
         model_cfg = self._normalize_used_model(model_cfg)
         chat_token = self._generate_chat_token(query)
-        anti_ext = spec["anti_ext"]
-        enter_type = spec["enter_type"]
-        agt_sess_cnt = spec["agt_sess_cnt"]
+        # Live guest UI uses enter_type=chat_site and anti_ext.ck1=timestamp.
+        enter_type = self.DEFAULT_ENTER_TYPE
+        agt_sess_cnt = 1
+        ts_ms = int(time.time() * 1000)
+        anti_ext = {"inputT": None, "ck1": ts_ms, "ck9": 500, "ck10": 400}
         return {
             "message": {
                 "inputMethod": "chat_search",
@@ -544,11 +571,12 @@ class BaiduChatClient:
                 "content": {
                     "query": "",
                     "agentInfo": {"agent_id": [""], "params": '{"agt_rk":' + str(rank) + ',"agt_sess_cnt":' + str(agt_sess_cnt) + '}'},
-                    "agentInfoList": [], "qtype": 0, "extData": {},
+                    "agentInfoList": [], "qtype": 0,
                 },
                 "searchInfo": {
                     "srcid": "", "order": "", "tplname": "", "dqaKey": "",
-                    "re_rank": str(rank), "ori_lid": self._ori_lid or "",
+                    # Guest browser capture uses empty ori_lid.
+                    "re_rank": str(rank), "ori_lid": "",
                     "sa": "bkb", "enter_type": enter_type,
                     "chatParams": {
                         "setype": "csaitab", "chat_samples": "WISE_NEW_CSAITAB",
@@ -591,21 +619,29 @@ class BaiduChatClient:
         out["modelFunction"] = mf
         return out
 
-    def _build_headers(self, query: str, model: str, rank: int) -> Dict[str, str]:
+    def _build_headers(self, query: str, model: str, rank: int, anti_ext: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
         spec = self._model_spec(model)
-        anti_ext = json.dumps(spec["anti_ext"], separators=(",", ":"))
         model_name = spec["usedModel"]["modelName"]
+        if anti_ext is None:
+            ts_ms = int(time.time() * 1000)
+            anti_ext = {"inputT": None, "ck1": ts_ms, "ck9": 500, "ck10": 400}
+        anti_json = json.dumps(anti_ext, separators=(",", ":"), ensure_ascii=False)
+        enter_type = self.DEFAULT_ENTER_TYPE
         x_chat_msg = (
             f"query:{urllib.parse.quote(query)},"
-            f"anti_ext:{urllib.parse.quote(anti_ext)},"
-            f"enter_type:{spec['enter_type']},re_rank:{rank},modelName:{model_name},sa:bkb"
+            f"anti_ext:{urllib.parse.quote(anti_json)},"
+            f"enter_type:{enter_type},re_rank:{rank},modelName:{model_name},sa:bkb"
         )
         # Live client sets isDeepseek="1" for any selected modelName
         is_deepseek = "1" if model_name else "0"
         return {
-            **self._headers, "Content-Type": "application/json",
-            "X-Chat-Message": x_chat_msg, "isDeepseek": is_deepseek,
-            "landingPageSwitch": "", "personifiedSwitch": "0", "source": "pc_csaitab",
+            **self._headers,
+            "Content-Type": "application/json",
+            "X-Chat-Message": x_chat_msg,
+            "isDeepseek": is_deepseek,
+            "landingPageSwitch": "",
+            "personifiedSwitch": "0",
+            "source": "pc_csaitab",
         }
 
     # ------------------------------------------------------------------
@@ -655,14 +691,16 @@ class BaiduChatClient:
 
         payload = self._build_message_payload(query, model, deep_search, internet_search, rank)
         effective_rank = payload["rank"]
-        headers = self._build_headers(query, model, effective_rank)
+        anti_ext = payload["message"]["anti_ext"]
+        headers = self._build_headers(query, model, effective_rank, anti_ext=anti_ext)
+        body_bytes = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
         _log("DEBUG", f"Request payload: chat_token={payload['message']['searchInfo']['chatParams']['chat_token'][:50]}... rank={effective_rank} model={model}")
-        _log("DEBUG", f"Request cookies: {self._cookie_string()[:120]}...")
+        _log("DEBUG", f"Request cookies: {self._cookie_string()[:160]}... risk={self._has_risk_cookies()}")
         _log("BAIDU", f"POST {self.CONVERSATION_API}  model={model}  deep={deep_search}")
         try:
             resp = self.session.post(
-                self.CONVERSATION_API, headers=headers, json=payload,
+                self.CONVERSATION_API, headers=headers, data=body_bytes,
                 stream=True, timeout=(5, 30),  # connect 5s, read 30s
             )
         except requests.exceptions.Timeout:
@@ -677,10 +715,12 @@ class BaiduChatClient:
             self._refresh_cookies()
             payload = self._build_message_payload(query, model, deep_search, internet_search, rank)
             effective_rank = payload["rank"]
-            headers = self._build_headers(query, model, effective_rank)
+            anti_ext = payload["message"]["anti_ext"]
+            headers = self._build_headers(query, model, effective_rank, anti_ext=anti_ext)
+            body_bytes = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             try:
                 resp = self.session.post(
-                    self.CONVERSATION_API, headers=headers, json=payload,
+                    self.CONVERSATION_API, headers=headers, data=body_bytes,
                     stream=True, timeout=(5, 30),
                 )
             except requests.exceptions.Timeout:
