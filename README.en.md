@@ -41,13 +41,24 @@ cp .env.example .env
 #   ./data/config.toml
 #   ./data/cookies.json
 docker compose up -d
-# Local source build for development:
+# Local source build for development (must build, do not only up):
 # docker compose -f docker-compose-dev.yml up -d --build
 ```
 
 - API: `http://localhost:8000/v1`
 - Admin: `http://localhost:8000/admin` (admin key from `.env` `BAIDU2API_ADMIN_KEY`)
 - Data dir: `./data/` (config + cookies persistence)
+
+If base image pulls fail, override mirrors in `.env` then rebuild:
+
+```bash
+# .env
+NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.13-slim
+
+docker compose -f docker-compose-dev.yml build --no-cache --pull
+docker compose -f docker-compose-dev.yml up -d
+```
 
 ### Local
 

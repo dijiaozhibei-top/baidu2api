@@ -3,7 +3,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # 国内若官方源慢/失败，可在 .env 覆盖，例如：
+        # NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+        # PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.13-slim
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13-slim}
     image: baidu2api:dev
+    # 不要去 Docker Hub 拉取 baidu2api:dev（该标签默认不存在）
+    pull_policy: build
     container_name: baidu2api-dev
     restart: unless-stopped
     env_file:

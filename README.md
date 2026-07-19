@@ -41,13 +41,24 @@ cp .env.example .env
 #   ./data/config.toml
 #   ./data/cookies.json
 docker compose up -d
-# 本地源码构建开发镜像：
+# 本地源码构建开发镜像（必须 build，不要只 up）：
 # docker compose -f docker-compose-dev.yml up -d --build
 ```
 
 - API: `http://localhost:8000/v1`
 - 管理台: `http://localhost:8000/admin`（默认管理员密钥见 `.env` 的 `BAIDU2API_ADMIN_KEY`）
 - 数据目录：`./data/`（配置与 Cookie 持久化）
+
+本地构建若基础镜像拉取失败（国内常见 `403` / `short read`），可在 `.env` 指定镜像加速源后再构建：
+
+```bash
+# .env
+NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.13-slim
+
+docker compose -f docker-compose-dev.yml build --no-cache --pull
+docker compose -f docker-compose-dev.yml up -d
+```
 
 ### 2）本地运行
 

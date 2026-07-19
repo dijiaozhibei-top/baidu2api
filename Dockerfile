@@ -1,5 +1,8 @@
 # Stage 1: build WebUI
-FROM node:22-alpine AS webui-builder
+ARG NODE_IMAGE=node:22-alpine
+ARG PYTHON_IMAGE=python:3.13-slim
+
+FROM ${NODE_IMAGE} AS webui-builder
 WORKDIR /app/webui
 COPY webui/package.json webui/package-lock.json ./
 RUN npm ci
@@ -7,7 +10,7 @@ COPY webui ./
 RUN npm run build
 
 # Stage 2: runtime
-FROM python:3.13-slim
+FROM ${PYTHON_IMAGE}
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
