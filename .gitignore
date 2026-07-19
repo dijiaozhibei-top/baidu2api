@@ -12,5 +12,6 @@ wheels/
 cookies.json
 cookies.*.json
 .env
+data/
 webui/node_modules/
 static/admin/

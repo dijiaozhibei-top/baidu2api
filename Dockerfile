@@ -11,7 +11,10 @@ FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    BAIDU2API_DATA_DIR=/app/data \
+    BAIDU2API_CONFIG_PATH=/app/data/config.toml \
+    BAIDU2API_COOKIE_FILE=/app/data/cookies.json
 
 WORKDIR /app
 
@@ -21,6 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 COPY --from=webui-builder /app/static/admin /app/static/admin
 
+RUN mkdir -p /app/data \
+    && chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 8000
 
-CMD ["python", "main.py", "--host", "0.0.0.0", "--port", "8000", "--config", "config.toml"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

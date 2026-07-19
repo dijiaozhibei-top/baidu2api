@@ -1,7 +1,7 @@
 services:
   baidu2api:
     build: .
-    image: baidu2api:latest
+    image: dijiaozhibei/baidu2api:latest
     container_name: baidu2api
     restart: unless-stopped
     env_file:
@@ -9,9 +9,12 @@ services:
     ports:
       - "${BAIDU2API_HOST_PORT:-8000}:8000"
     volumes:
-      - ./config.toml:/app/config.toml
-      - ./cookies.json:/app/cookies.json
+      # 配置与 Cookie 都放在宿主机 ./data，容器首次启动会自动创建
+      - ./data:/app/data
     environment:
       - TZ=${TZ:-Asia/Shanghai}
       - PORT=8000
       - BAIDU2API_ADMIN_KEY=${BAIDU2API_ADMIN_KEY:-baidu2api}
+      - BAIDU2API_DATA_DIR=/app/data
+      - BAIDU2API_CONFIG_PATH=/app/data/config.toml
+      - BAIDU2API_COOKIE_FILE=/app/data/cookies.json

@@ -149,7 +149,7 @@ def _resolve_client_config(config: Dict[str, Any]) -> Dict[str, Any]:
             persistence_cfg.get("cookie_file")
             if isinstance(persistence_cfg, dict)
             else config.get("cookie_file")
-        ) or "cookies.json",
+        ) or "data/cookies.json",
         "auto_save_cookies": (
             persistence_cfg.get("auto_save_cookies")
             if isinstance(persistence_cfg, dict)

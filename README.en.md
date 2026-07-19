@@ -33,15 +33,21 @@ Aligned with live `usableModel` (2026-07):
 
 ## Quick start
 
-### Docker Compose (builds image locally)
+### Docker Compose (recommended)
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
+# Only mount ./data — first start auto-creates:
+#   ./data/config.toml
+#   ./data/cookies.json
+docker compose up -d
+# Or build locally:
+# docker compose up -d --build
 ```
 
 - API: `http://localhost:8000/v1`
-- Admin: `http://localhost:8000/admin` (default admin key `baidu2api`)
+- Admin: `http://localhost:8000/admin` (admin key from `.env` `BAIDU2API_ADMIN_KEY`)
+- Data dir: `./data/` (config + cookies persistence)
 
 ### Local
 
@@ -99,7 +105,10 @@ When `api_keys` is configured, missing/invalid bearer tokens return **HTTP 401**
 
 ## Config
 
-See [`config.toml`](config.toml) and [`.env.example`](.env.example). Key fields: cookies pool, `auth.api_keys`, `auth.admin_key` / `BAIDU2API_ADMIN_KEY`, context limits, cookie persistence.
+Docker reads/writes `./data/config.toml` and `./data/cookies.json` (auto-created on first start if missing).  
+Template: [`config.default.toml`](config.default.toml). Env vars: [`.env.example`](.env.example).
+
+Key fields: cookies pool (optional — visitor cookies can be auto-fetched), `auth.api_keys`, `auth.admin_key` / `BAIDU2API_ADMIN_KEY`, context limits, cookie persistence.
 
 ## Development
 

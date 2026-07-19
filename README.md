@@ -33,16 +33,21 @@
 
 ## 快速开始
 
-### 1）Docker Compose（推荐，本地构建镜像）
+### 1）Docker Compose（推荐）
 
 ```bash
 cp .env.example .env
-# 编辑 config.toml 填入 Cookie / api_keys / admin_key（可选）
-docker compose up -d --build
+# 只需挂载 ./data；首次启动会自动创建：
+#   ./data/config.toml
+#   ./data/cookies.json
+docker compose up -d
+# 或本地构建：
+# docker compose up -d --build
 ```
 
 - API: `http://localhost:8000/v1`
-- 管理台: `http://localhost:8000/admin`（默认管理员密钥 `baidu2api`，请尽快修改）
+- 管理台: `http://localhost:8000/admin`（默认管理员密钥见 `.env` 的 `BAIDU2API_ADMIN_KEY`）
+- 数据目录：`./data/`（配置与 Cookie 持久化）
 
 ### 2）本地运行
 
@@ -87,11 +92,12 @@ docker pull gh-proxy.org/docker/ghcr.io/dijiaozhibei-top/baidu2api:latest
 运行示例：
 
 ```bash
+mkdir -p data
 docker run -d --name baidu2api -p 8000:8000 \
-  -v $PWD/config.toml:/app/config.toml \
-  -v $PWD/cookies.json:/app/cookies.json \
+  -v $PWD/data:/app/data \
   -e BAIDU2API_ADMIN_KEY=change-me \
   dijiaozhibei/baidu2api:latest
+# 首次启动自动创建 /app/data/config.toml 与 /app/data/cookies.json
 ```
 
 ## API 示例
@@ -111,15 +117,16 @@ curl http://localhost:8000/v1/chat/completions \
 
 ## 配置说明
 
-见 [`config.toml`](config.toml) 与 [`.env.example`](.env.example)：
+Docker 默认读写 `./data/config.toml` 与 `./data/cookies.json`（不存在时由入口脚本自动创建）。  
+模板见 [`config.default.toml`](config.default.toml)，环境变量见 [`.env.example`](.env.example)。
 
 | 项 | 说明 |
 | --- | --- |
-| `[cookies].value` / `values` | 百度 Cookie；多值启用池 |
+| `[cookies].value` / `values` | 百度 Cookie；多值启用池；可留空自动获取访客 Cookie |
 | `[auth].api_keys` | OpenAI API 密钥列表；空=不鉴权 |
 | `[auth].admin_key` | WebUI 管理员密钥（也可用环境变量 `BAIDU2API_ADMIN_KEY`） |
 | `[context].fresh_conversation` | 每次请求新百度会话（默认 true，对应设置里的「会话独立拆分」） |
-| `[cookie_persistence]` | Cookie 自动落盘 |
+| `[cookie_persistence]` | Cookie 自动落盘路径（Docker 下为 `data/cookies.json`） |
 
 ## 开发
 

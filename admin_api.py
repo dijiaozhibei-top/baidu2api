@@ -27,7 +27,7 @@ class AdminState:
         self.api_keys: list[str] = []
         self.cookie_values: list[str] = []
         self.user_agent: Optional[str] = None
-        self.cookie_file = "cookies.json"
+        self.cookie_file = "data/cookies.json"
         self.auto_save_cookies = True
         self.fresh_conversation = True
         self.context_max_chars = 12000
@@ -91,7 +91,7 @@ class AdminState:
             self.api_keys = list(api_keys or [])
             self.cookie_values = list(cookie_values or [])
             self.user_agent = user_agent
-            self.cookie_file = cookie_file or "cookies.json"
+            self.cookie_file = cookie_file or "data/cookies.json"
             self.auto_save_cookies = bool(auto_save_cookies)
             self.fresh_conversation = bool(fresh_conversation)
             self.context_max_chars = int(context_max_chars)
@@ -201,7 +201,7 @@ class AdminState:
             if "values" in cookies and isinstance(cookies["values"], list):
                 self.cookie_values = [str(v).strip() for v in cookies["values"] if str(v).strip()]
             if "cookie_file" in cookies:
-                self.cookie_file = str(cookies.get("cookie_file") or "cookies.json")
+                self.cookie_file = str(cookies.get("cookie_file") or "data/cookies.json")
             if "auto_save_cookies" in cookies:
                 self.auto_save_cookies = bool(cookies.get("auto_save_cookies"))
 
