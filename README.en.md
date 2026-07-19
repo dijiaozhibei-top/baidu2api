@@ -41,24 +41,28 @@ cp .env.example .env
 #   ./data/config.toml
 #   ./data/cookies.json
 docker compose up -d
-# Local source build for development (must build, do not only up):
-# docker compose -f docker-compose-dev.yml up -d --build
+# Local source build (recommended script pre-pulls base images):
+# bash scripts/build-dev.sh
 ```
 
 - API: `http://localhost:8000/v1`
 - Admin: `http://localhost:8000/admin` (admin key from `.env` `BAIDU2API_ADMIN_KEY`)
 - Data dir: `./data/` (config + cookies persistence)
 
-If base image pulls fail, override mirrors in `.env` then rebuild:
+If base image pulls fail (`403` / `short read`), pre-pull mirrors then build:
 
 ```bash
-# .env
-NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
-PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.13-slim
-
-docker compose -f docker-compose-dev.yml build --no-cache --pull
-docker compose -f docker-compose-dev.yml up -d
+git pull
+docker pull docker.m.daocloud.io/library/node:22-alpine
+docker pull docker.m.daocloud.io/library/python:3.13-slim
+docker tag docker.m.daocloud.io/library/node:22-alpine node:22-alpine
+docker tag docker.m.daocloud.io/library/python:3.13-slim python:3.13-slim
+docker-compose -f docker-compose-dev.yml build --no-cache
+docker-compose -f docker-compose-dev.yml up -d
+# or: bash scripts/build-dev.sh
 ```
+
+Note: `baidu2api:dev` is a local tag only; always `build` before `up`.
 
 ### Local
 

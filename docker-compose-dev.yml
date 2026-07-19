@@ -3,14 +3,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # 不在 build 时强制 --pull，避免镜像站抽风把已缓存的基础镜像拉坏
+      pull: false
       args:
-        # 国内若官方源慢/失败，可在 .env 覆盖，例如：
+        # 国内构建建议在 .env 里显式指定加速源，例如：
         # NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
         # PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.13-slim
         NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
         PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13-slim}
+    # 仅作为本地构建产物标签；不要指望从 Docker Hub 拉取 baidu2api:dev
     image: baidu2api:dev
-    # 不要去 Docker Hub 拉取 baidu2api:dev（该标签默认不存在）
     pull_policy: build
     container_name: baidu2api-dev
     restart: unless-stopped
@@ -19,7 +21,6 @@ services:
     ports:
       - "${BAIDU2API_HOST_PORT:-8000}:8000"
     volumes:
-      # 配置与 Cookie 都放在宿主机 ./data，容器首次启动会自动创建
       - ./data:/app/data
     environment:
       - TZ=${TZ:-Asia/Shanghai}
