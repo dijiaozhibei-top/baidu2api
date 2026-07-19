@@ -41,8 +41,8 @@ cp .env.example .env
 #   ./data/config.toml
 #   ./data/cookies.json
 docker compose up -d
-# Or build locally:
-# docker compose up -d --build
+# Local source build for development:
+# docker compose -f docker-compose-dev.yml up -d --build
 ```
 
 - API: `http://localhost:8000/v1`
