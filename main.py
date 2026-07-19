@@ -436,6 +436,40 @@ def _handle_sync(query: str, baidu_model: str, deep_search: bool, display_model:
         return jsonify({"error": {"message": str(e), "type": "internal_error"}}), 500
 
 
+def _build_client_pool(cookie_values, user_agent, cookie_file, auto_save_cookies, fresh_conversation) -> BaiduClientPool:
+    pool = BaiduClientPool(
+        cookie_values=cookie_values,
+        user_agent=user_agent,
+        cookie_file=cookie_file,
+        auto_save_cookies=auto_save_cookies,
+        fresh_conversation=fresh_conversation,
+    )
+    return pool
+
+
+def _warmup_cookies(pool: BaiduClientPool, force_refresh: bool = False) -> Dict[str, Any]:
+    """Fetch visitor cookies at startup / on demand so deploy works without manual cookies."""
+    try:
+        status = pool.ensure_ready(force_refresh=force_refresh)
+        admin_state.set_runtime_cookie_status(status)
+        return status
+    except Exception as e:
+        _log("WARN", f"Cookie auto-fetch failed: {e}")
+        status = {
+            "source": "none",
+            "cookie_count": 0,
+            "cookie_names": [],
+            "has_token": False,
+            "has_lid": False,
+            "cookie_string": "",
+            "cookie_preview": "",
+            "error": str(e),
+            "pool_size": 0,
+        }
+        admin_state.set_runtime_cookie_status(status)
+        return status
+
+
 def _reload_runtime_from_admin():
     """Called when admin WebUI changes config."""
     global client, api_keys, context_options, extra_model_aliases
@@ -447,13 +481,18 @@ def _reload_runtime_from_admin():
             "context_max_message_chars": admin_state.context_max_message_chars,
         }
         extra_model_aliases = dict(admin_state.model_aliases)
-        client = BaiduClientPool(
+        client = _build_client_pool(
             cookie_values=list(admin_state.cookie_values),
             user_agent=admin_state.user_agent,
             cookie_file=admin_state.cookie_file,
             auto_save_cookies=admin_state.auto_save_cookies,
             fresh_conversation=admin_state.fresh_conversation,
         )
+    # If admin cleared manual cookies, re-warm auto visitor cookies.
+    if client and not admin_state.cookie_values:
+        _warmup_cookies(client, force_refresh=False)
+    else:
+        admin_state.set_runtime_cookie_status(client.cookie_status() if client else {})
     _log("INFO", f"Runtime reloaded from admin: keys={len(api_keys)} cookies={len(admin_state.cookie_values)}")
 
 
@@ -472,7 +511,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, config: Optional[Dict[st
     models_cfg = config.get("models") if isinstance(config.get("models"), dict) else {}
     extra_model_aliases = {str(k): str(v) for k, v in (models_cfg or {}).items()}
 
-    client = BaiduClientPool(
+    client = _build_client_pool(
         cookie_values=client_cfg["cookie_values"],
         user_agent=client_cfg["user_agent"],
         cookie_file=client_cfg["cookie_file"],
@@ -498,14 +537,25 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, config: Optional[Dict[st
         version="0.2.0",
         on_config_changed=_reload_runtime_from_admin,
     )
+    # Wire admin "auto-fetch cookies" button to the live pool.
+    admin_state.set_cookie_fetcher(lambda force=False: _warmup_cookies(client, force_refresh=force) if client else {})
     register_admin_routes(app)
 
+    # Auto-fetch visitor cookies at startup when no manual cookies are configured.
+    # This is what makes "deploy without filling cookies" work.
+    if not client_cfg["cookie_values"]:
+        status = _warmup_cookies(client, force_refresh=False)
+        cookie_mode = (
+            f"auto-fetch source={status.get('source')} count={status.get('cookie_count')} "
+            f"file={client_cfg['cookie_file']}"
+        )
+        if status.get("error"):
+            cookie_mode += f" error={status['error']}"
+    else:
+        admin_state.set_runtime_cookie_status(client.cookie_status())
+        cookie_mode = f"user-provided pool={len(client_cfg['cookie_values'])}"
+
     _log("INFO", f"Flask server starting at http://{host}:{port}")
-    cookie_mode = (
-        f"user-provided pool={len(client_cfg['cookie_values'])}"
-        if client_cfg["cookie_values"]
-        else f"auto-fetch + file={client_cfg['cookie_file']}"
-    )
     _log("INFO", f"Cookie mode: {cookie_mode}")
     _log("INFO", f"Auth: {'enabled' if api_keys else 'disabled'}")
     _log("INFO", f"Admin WebUI: http://{host}:{port}/admin")

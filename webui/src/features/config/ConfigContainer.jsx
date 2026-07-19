@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, ChevronDown, Copy, Cookie, Key, Plus, Save, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Copy, Cookie, Key, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 
 import { useI18n } from '../../i18n'
@@ -29,6 +29,7 @@ export default function ConfigContainer({ config, onRefresh, onMessage, authFetc
     const [keysExpanded, setKeysExpanded] = useState(true)
     const [copiedKey, setCopiedKey] = useState(null)
     const [busyKey, setBusyKey] = useState(null)
+    const [fetchingCookies, setFetchingCookies] = useState(false)
 
     
     useEffect(() => {
@@ -60,6 +61,32 @@ export default function ConfigContainer({ config, onRefresh, onMessage, authFetc
             onMessage('error', e.message)
         } finally {
             setSavingCookies(false)
+        }
+    }
+
+    const autoFetchCookies = async () => {
+        setFetchingCookies(true)
+        try {
+            const res = await authFetch('/admin/cookies/auto-fetch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true }),
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                onMessage('error', data.detail || t('config.autoFetchFailed'))
+                return
+            }
+            const status = data.runtime_cookies || {}
+            onMessage('success', t('config.autoFetchSuccess', {
+                source: status.source || 'auto',
+                count: status.cookie_count || 0,
+            }))
+            onRefresh?.()
+        } catch (e) {
+            onMessage('error', e.message)
+        } finally {
+            setFetchingCookies(false)
         }
     }
 
@@ -133,6 +160,31 @@ export default function ConfigContainer({ config, onRefresh, onMessage, authFetc
                     <h3 className="font-semibold">{t('config.cookiesTitle')}</h3>
                 </div>
                 <p className="text-sm text-muted-foreground">{t('config.cookiesHelp')}</p>
+                <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs space-y-1">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        <span>{t('config.autoMode')}: <b>{config?.auto_cookie_mode ? t('config.autoModeOn') : t('config.autoModeOff')}</b></span>
+                        <span>{t('config.runtimeSource')}: <b>{config?.runtime_cookies?.source || 'none'}</b></span>
+                        <span>{t('config.runtimeCount')}: <b>{config?.runtime_cookies?.cookie_count ?? 0}</b></span>
+                        <span>token: <b>{config?.runtime_cookies?.has_token ? 'yes' : 'no'}</b></span>
+                    </div>
+                    {config?.runtime_cookies?.cookie_preview ? (
+                        <div className="font-mono break-all text-muted-foreground">{config.runtime_cookies.cookie_preview}</div>
+                    ) : null}
+                    {config?.runtime_cookies?.error ? (
+                        <div className="text-destructive">{config.runtime_cookies.error}</div>
+                    ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2 justify-end">
+                    <button
+                        type="button"
+                        onClick={autoFetchCookies}
+                        disabled={fetchingCookies}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-secondary text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
+                    >
+                        <RefreshCw className={clsx('w-4 h-4', fetchingCookies && 'animate-spin')} />
+                        {fetchingCookies ? t('actions.loading') : t('config.autoFetch')}
+                    </button>
+                </div>
                 <textarea
                     rows={8}
                     value={cookiesText}

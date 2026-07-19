@@ -239,6 +239,11 @@ class BaiduChatClient:
         "dsv4flash": "deepseek-v4-flash",
     }
 
+    BASE_URLS = (
+        "https://chat.baidu.com",
+        "https://wenxin.baidu.com/?enter_type=chat_site",
+    )
+
     def __init__(self, cookies: Optional[str] = None, user_agent: Optional[str] = None,
                  cookie_file: Optional[str] = None, auto_save_cookies: bool = False):
         self.session = requests.Session()
@@ -253,25 +258,32 @@ class BaiduChatClient:
         self._lid: Optional[str] = None
         self._ori_lid: Optional[str] = None
         self._last_hint: Optional[str] = None
+        self._cookie_source: str = "none"  # user | file | auto | none
         self._headers = {
             "User-Agent": self.user_agent,
             "Accept": "text/event-stream",
-            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
             "Referer": "https://chat.baidu.com/",
             "Origin": "https://chat.baidu.com",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Upgrade-Insecure-Requests": "1",
         }
 
         if self._user_cookies:
             _log("INFO", f"Using user-provided cookies ({len(self._user_cookies)} chars)")
             self._inject_cookie_string(self._user_cookies)
+            self._cookie_source = "user"
         else:
             _log("INFO", "No cookies provided — will auto-fetch from chat.baidu.com")
 
         if self._cookie_file and not self._user_cookies:
             loaded = self._load_cookies_from_file()
             if loaded:
+                self._cookie_source = "file"
                 _log("INFO", f"Loaded cookies from {self._cookie_file}")
 
     # ------------------------------------------------------------------
@@ -324,16 +336,20 @@ class BaiduChatClient:
         return False
 
     def _ensure_cookies(self):
-        if not self.session.cookies:
-            _log("BAIDU", "Cookie jar empty → fetching homepage for cookies")
+        if not self.session.cookies or not self._token or not self._lid:
+            _log("BAIDU", "Cookie/token missing → fetching homepage for cookies")
             self._get_base_data()
 
     def _refresh_cookies(self):
         _log("WARN", "Refreshing cookies (clearing old cookies)")
+        # Keep user-provided cookies if any; only clear auto/session jar.
         self.session.cookies.clear()
         self._token = None
         self._lid = None
         self._ori_lid = None
+        if self._user_cookies:
+            self._inject_cookie_string(self._user_cookies)
+            self._cookie_source = "user"
         self._get_base_data()
 
     def start_new_conversation(self):
@@ -341,6 +357,34 @@ class BaiduChatClient:
         self._lid = None
         self._ori_lid = None
         self._get_base_data()
+
+    def ensure_ready(self, force_refresh: bool = False) -> Dict[str, Any]:
+        """Eagerly fetch visitor cookies + token. Safe to call at startup."""
+        if force_refresh:
+            self._refresh_cookies()
+        else:
+            self._ensure_cookies()
+        return self.cookie_status()
+
+    def cookie_status(self) -> Dict[str, Any]:
+        cookie_str = self._cookie_string()
+        names = []
+        for part in cookie_str.split(";"):
+            part = part.strip()
+            if "=" in part:
+                names.append(part.split("=", 1)[0].strip())
+        return {
+            "source": self._cookie_source,
+            "cookie_count": len(names),
+            "cookie_names": names,
+            "has_token": bool(self._token),
+            "has_lid": bool(self._lid),
+            "cookie_string": cookie_str,
+            "cookie_preview": (cookie_str[:80] + "...") if len(cookie_str) > 80 else cookie_str,
+            "cookie_file": self._cookie_file or "",
+            "auto_save": bool(self._auto_save),
+            "user_provided": bool(self._user_cookies),
+        }
 
     def _should_refresh_response(self, resp) -> bool:
         if resp.status_code in (401, 403):
@@ -357,40 +401,84 @@ class BaiduChatClient:
     # ------------------------------------------------------------------
     # Base data (token + lid + auto cookies) — with strict timeout
     # ------------------------------------------------------------------
-    def _get_base_data(self) -> Dict[str, Any]:
-        _log("BAIDU", f"GET {self.BASE_URL}  (timeout=10s)")
-        try:
-            resp = self.session.get(
-                self.BASE_URL,
-                headers={**self._headers, "Accept": "text/html"},
-                timeout=(5, 10),  # connect, read
-                allow_redirects=True,
-            )
-        except requests.exceptions.Timeout:
-            raise RuntimeError("chat.baidu.com homepage timed out (10s) — check network / proxy / DNS")
-        except requests.exceptions.ConnectionError as e:
-            raise RuntimeError(f"Connection error to chat.baidu.com: {e}")
-
-        _log("BAIDU", f"Homepage status={resp.status_code}  cookies_after={len(self.session.cookies)}")
-        resp.raise_for_status()
-
+    def _extract_base_data_from_html(self, html: str) -> Optional[Dict[str, Any]]:
         match = re.search(
             r'<script[^>]*name="aiTabFrameBaseData"[^>]*>(.*?)</script>',
-            resp.text,
+            html,
             re.DOTALL,
         )
         if not match:
-            raise RuntimeError("Could not find aiTabFrameBaseData in page HTML — Baidu may have changed the page structure")
+            # Some builds embed JSON without the name attribute first.
+            match = re.search(
+                r'aiTabFrameBaseData["\'\s>]+[^<{]*(\{.*?"token"\s*:\s*".*?".*?\})',
+                html,
+                re.DOTALL,
+            )
+            if not match:
+                return None
+            raw = match.group(1)
+        else:
+            raw = match.group(1)
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
 
-        data = json.loads(match.group(1))
-        self._token = data.get("token", "")
-        self._lid = data.get("lid", "")
-        self._ori_lid = data.get("logParams", {}).get("applid", self._lid)
-        _log("BAIDU", f"Extracted token={self._token[:20]}... lid={self._lid}")
+    def _get_base_data(self) -> Dict[str, Any]:
+        last_error: Optional[Exception] = None
+        for url in self.BASE_URLS:
+            _log("BAIDU", f"GET {url}  (timeout=10s)")
+            try:
+                resp = self.session.get(
+                    url,
+                    headers={
+                        **self._headers,
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    },
+                    timeout=(5, 10),
+                    allow_redirects=True,
+                )
+            except requests.exceptions.Timeout as e:
+                last_error = RuntimeError(f"{url} timed out (10s) — check network / proxy / DNS")
+                _log("WARN", str(last_error))
+                continue
+            except requests.exceptions.ConnectionError as e:
+                last_error = RuntimeError(f"Connection error to {url}: {e}")
+                _log("WARN", str(last_error))
+                continue
 
-        if self._auto_save:
-            self._save_cookies_to_file()
-        return data
+            _log(
+                "BAIDU",
+                f"Homepage status={resp.status_code} final_url={resp.url} cookies_after={len(self.session.cookies)}",
+            )
+            if not resp.ok:
+                last_error = RuntimeError(f"{url} returned {resp.status_code}")
+                continue
+
+            data = self._extract_base_data_from_html(resp.text)
+            if not data:
+                last_error = RuntimeError(
+                    "Could not find aiTabFrameBaseData in page HTML — Baidu may have changed the page structure"
+                )
+                _log("WARN", f"{url}: {last_error}")
+                continue
+
+            self._token = data.get("token", "")
+            self._lid = data.get("lid", "")
+            self._ori_lid = data.get("logParams", {}).get("applid", self._lid)
+            if not self._user_cookies:
+                self._cookie_source = "auto"
+            _log("BAIDU", f"Extracted token={str(self._token)[:20]}... lid={self._lid}")
+
+            # Always try to persist visitor cookies when auto mode is on, so
+            # restarts do not need another homepage scrape.
+            if self._auto_save:
+                self._save_cookies_to_file()
+            return data
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("Failed to auto-fetch Baidu cookies/token from homepage")
 
     def _generate_chat_token(self, query: str) -> str:
         if not self._token or not self._lid:

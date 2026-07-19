@@ -478,7 +478,7 @@
     },
     "config": {
         "cookiesTitle": "Baidu Cookies",
-        "cookiesHelp": "One cookie string per line (blank line also separates). Leave empty to auto-fetch from homepage.",
+        "cookiesHelp": "One cookie string per line (blank line also separates). Leave empty to auto-fetch visitor cookies from chat.baidu.com into cookies.json.",
         "cookiesPlaceholder": "BAIDUID=xxx; BIDUPSID=xxx; ...",
         "saveCookies": "Save Cookies",
         "saveCookiesSuccess": "Cookies saved and applied",
@@ -489,6 +489,14 @@
         "addKey": "Add Key",
         "addKeySuccess": "Key added: {key}",
         "confirmDeleteKey": "Delete this API key?",
-        "noKeys": "No API keys (open access)"
+        "noKeys": "No API keys (open access)",
+        "autoMode": "Auto cookie mode",
+        "autoModeOn": "On (auto-fetch visitor cookies when none configured)",
+        "autoModeOff": "Off (using manual cookies below)",
+        "runtimeSource": "Runtime source",
+        "runtimeCount": "Cookie count",
+        "autoFetch": "Auto-fetch now",
+        "autoFetchSuccess": "Cookies auto-fetched: source={source}, count={count}",
+        "autoFetchFailed": "Failed to auto-fetch cookies"
     }
 }

@@ -478,7 +478,7 @@
     },
     "config": {
         "cookiesTitle": "百度 Cookie",
-        "cookiesHelp": "每行一个 Cookie 字符串；也可空行分隔多个 Cookie。留空则自动从首页获取。",
+        "cookiesHelp": "每行一个 Cookie 字符串；也可空行分隔多个 Cookie。留空则自动从 chat.baidu.com 获取访客 Cookie 并写入 cookies.json。",
         "cookiesPlaceholder": "BAIDUID=xxx; BIDUPSID=xxx; ...",
         "saveCookies": "保存 Cookie",
         "saveCookiesSuccess": "Cookie 已保存并热更新",
@@ -489,6 +489,14 @@
         "addKey": "添加密钥",
         "addKeySuccess": "已添加密钥 {key}",
         "confirmDeleteKey": "确认删除该 API 密钥？",
-        "noKeys": "暂无 API 密钥（当前开放访问）"
+        "noKeys": "暂无 API 密钥（当前开放访问）",
+        "autoMode": "自动 Cookie 模式",
+        "autoModeOn": "开启（未手动配置时自动获取访客 Cookie）",
+        "autoModeOff": "关闭（使用下方手动 Cookie）",
+        "runtimeSource": "运行时来源",
+        "runtimeCount": "Cookie 数量",
+        "autoFetch": "立即自动获取",
+        "autoFetchSuccess": "已自动获取 Cookie：source={source}, count={count}",
+        "autoFetchFailed": "自动获取 Cookie 失败"
     }
 }

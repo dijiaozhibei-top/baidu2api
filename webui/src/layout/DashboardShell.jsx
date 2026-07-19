@@ -100,7 +100,9 @@ export default function DashboardShell({ token, onLogout, config, fetchConfig, s
         }
     }
 
-    const cookieCount = Array.isArray(config?.cookies) ? config.cookies.length : 0
+    const cookieCount = Array.isArray(config?.cookies) && config.cookies.length > 0
+        ? config.cookies.length
+        : (config?.runtime_cookies?.cookie_count || 0)
     const keyCount = Array.isArray(config?.keys) ? config.keys.length : 0
 
     return (

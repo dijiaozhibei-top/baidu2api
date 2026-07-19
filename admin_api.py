@@ -38,6 +38,32 @@ class AdminState:
         self._serializer: Optional[URLSafeTimedSerializer] = None
         self._secret = secrets.token_hex(32)
         self._on_config_changed: Optional[Callable[[], None]] = None
+        self._cookie_fetcher: Optional[Callable[..., Dict[str, Any]]] = None
+        self.runtime_cookie_status: Dict[str, Any] = {
+            "source": "none",
+            "cookie_count": 0,
+            "cookie_names": [],
+            "has_token": False,
+            "has_lid": False,
+            "cookie_preview": "",
+            "pool_size": 0,
+        }
+
+    def set_cookie_fetcher(self, fetcher: Optional[Callable[..., Dict[str, Any]]]):
+        with self.lock:
+            self._cookie_fetcher = fetcher
+
+    def set_runtime_cookie_status(self, status: Optional[Dict[str, Any]]):
+        with self.lock:
+            self.runtime_cookie_status = dict(status or {})
+
+    def fetch_cookies_now(self, force: bool = True) -> Dict[str, Any]:
+        fetcher = self._cookie_fetcher
+        if not fetcher:
+            raise RuntimeError("Cookie auto-fetch is not available yet")
+        status = fetcher(force)
+        self.set_runtime_cookie_status(status)
+        return status
 
     def configure(
         self,
@@ -76,6 +102,8 @@ class AdminState:
             self._secret = secrets.token_hex(32)
             self._serializer = URLSafeTimedSerializer(self._secret, salt="baidu2api-admin")
             self._on_config_changed = on_config_changed
+            # keep existing cookie fetcher across reconfigure
+
 
     def create_token(self) -> Tuple[str, int]:
         assert self._serializer is not None
@@ -112,6 +140,8 @@ class AdminState:
                 },
                 "headers": {"user_agent": self.user_agent or ""},
                 "model_aliases": dict(self.model_aliases),
+                "runtime_cookies": dict(self.runtime_cookie_status),
+                "auto_cookie_mode": not bool(self.cookie_values),
             }
 
     def snapshot_settings(self) -> Dict[str, Any]:
@@ -143,6 +173,8 @@ class AdminState:
                     "cookie_file": self.cookie_file,
                     "auto_save_cookies": self.auto_save_cookies,
                 },
+                "runtime_cookies": dict(self.runtime_cookie_status),
+                "auto_cookie_mode": not bool(self.cookie_values),
                 "model_aliases": dict(self.model_aliases),
                 "env_backed": False,
                 "needs_vercel_sync": False,
@@ -531,6 +563,22 @@ def register_admin_routes(app: Flask):
     def admin_keys_update(key: str):
         # Metadata only — keep key string stable.
         return jsonify({"success": True, "key": key})
+
+    @app.route("/admin/cookies/status", methods=["GET"])
+    @require_admin
+    def admin_cookies_status():
+        return jsonify({"success": True, "runtime_cookies": admin_state.runtime_cookie_status, "auto_cookie_mode": not bool(admin_state.cookie_values)})
+
+    @app.route("/admin/cookies/auto-fetch", methods=["POST"])
+    @require_admin
+    def admin_cookies_auto_fetch():
+        body = request.get_json(force=True, silent=True) or {}
+        force = bool(body.get("force", True))
+        try:
+            status = admin_state.fetch_cookies_now(force=force)
+            return jsonify({"success": True, "runtime_cookies": status, "auto_cookie_mode": not bool(admin_state.cookie_values)})
+        except Exception as e:
+            return jsonify({"success": False, "detail": str(e)}), 500
 
     @app.route("/admin/version", methods=["GET"])
     @require_admin

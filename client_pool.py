@@ -32,7 +32,38 @@ class BaiduClientPool:
         self._cursor = 0
         self._lock = threading.Lock()
         self._fresh_conversation = fresh_conversation
+        self._user_agent = user_agent
+        self._cookie_file = cookie_file
+        self._auto_save_cookies = auto_save_cookies
         _log("INFO", f"Baidu client pool initialized: size={len(self._clients)}")
+
+    def ensure_ready(self, force_refresh: bool = False) -> Dict[str, Any]:
+        """Warm up the first client (auto-fetch visitor cookies + token)."""
+        if not self._clients:
+            raise RuntimeError("Baidu client pool is empty")
+        status = self._clients[0].ensure_ready(force_refresh=force_refresh)
+        _log(
+            "INFO",
+            f"Cookie ready: source={status.get('source')} count={status.get('cookie_count')} "
+            f"token={status.get('has_token')}",
+        )
+        return status
+
+    def cookie_status(self) -> Dict[str, Any]:
+        if not self._clients:
+            return {
+                "source": "none",
+                "cookie_count": 0,
+                "cookie_names": [],
+                "has_token": False,
+                "has_lid": False,
+                "cookie_string": "",
+                "cookie_preview": "",
+                "pool_size": 0,
+            }
+        status = self._clients[0].cookie_status()
+        status["pool_size"] = len(self._clients)
+        return status
 
     def _next_client(self) -> tuple[int, BaiduChatClient]:
         with self._lock:
