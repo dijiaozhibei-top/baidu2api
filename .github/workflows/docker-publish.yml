@@ -76,13 +76,17 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Log in to GHCR
+        continue-on-error: true
+        id: ghcr_login
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push GHCR
+        # If GITHUB_TOKEN cannot write packages on this account, Docker Hub remains the primary image.
+        continue-on-error: true
         uses: docker/build-push-action@v6
         with:
           context: .
