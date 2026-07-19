@@ -4,86 +4,97 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`wenxin2api` — reverse-engineered client for Baidu Wenxin Assistant (`chat.baidu.com`) exposed as an OpenAI-compatible HTTP API. Pure-algorithm token generation; no browser automation at runtime.
+`baidu2api` — reverse-engineered client for Baidu Wenxin Assistant (`chat.baidu.com` / `wenxin.baidu.com`) exposed as an OpenAI-compatible HTTP API, plus a light-theme React admin WebUI at `/admin`.
 
-Requires Python ≥ 3.13.
+Requires Python ≥ 3.13. WebUI build requires Node.js 20+.
 
 ## Commands
 
 ```bash
-# Install
+# Install backend
 pip install -r requirements.txt
-# or with uv (lockfile present)
+# or
 uv sync
 
-# Run OpenAI-compatible server (default 0.0.0.0:8000)
+# Build admin WebUI → static/admin
+cd webui && npm ci && npm run build && cd ..
+
+# Run server (default 0.0.0.0:8000)
 python main.py --config config.toml
 python main.py --host 0.0.0.0 --port 8000
 
-# Direct CLI against Baidu (bypasses Flask)
-python baidu_chat.py "query" --model ernie-4.5
-python baidu_chat.py "query" --model deepseek-r1 --deep-search
-python baidu_chat.py "query" --model deepseek-v4-pro --cookies "BAIDUID=..."
+# WebUI dev (Vite proxies /admin API + /v1 to :8000)
+cd webui && npm run dev
 
-# Tests (mock-based Flask integration suite; not pytest)
+# CLI against Baidu (bypasses Flask)
+python baidu_chat.py "query" --model deepseek-v4-flash
+python baidu_chat.py "query" --model smartmode-thinking --cookies "BAIDUID=..."
+
+# Tests (mock Flask integration; not pytest)
 python test_server.py
 
-# Docker
+# Docker (builds image locally)
+cp .env.example .env
 docker compose up -d --build
 ```
 
-There is no lint/typecheck/format toolchain configured. CI (`.github/workflows/docker-publish.yml`) only builds and pushes the Docker image to GHCR on push to `main`/`master` and on `v*.*.*` tags.
+No lint/typecheck toolchain. CI (`.github/workflows/docker-publish.yml`) multi-arch builds and pushes to **GHCR** (`ghcr.io/dijiaozhibei-top/baidu2api`) and **Docker Hub** (`dijiaozhibei/baidu2api`). Requires repo secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`.
 
 ## Architecture
 
-Request path:
-
 ```
-OpenAI client
-  → main.py (Flask: /v1/models, /v1/chat/completions)
-    → tool_calling.messages_to_prompt  (flatten OpenAI messages + optional tools prompt)
-    → client_pool.BaiduClientPool      (least-inflight cookie selection + failover)
-      → baidu_chat.BaiduChatClient     (token, payload, SSE → text/thinking chunks)
-    → tool_calling.parse_tool_calls    (XML tool output → OpenAI tool_calls)
-  → OpenAI-shaped JSON or SSE response
+OpenAI client / Admin WebUI
+  → main.py (Flask)
+      /v1/*          OpenAI surface + optional API-key auth (invalid → 401)
+      /admin/*       JWT admin API + static SPA (static/admin)
+        → admin_api.AdminState  (cookies, keys, context, password; persists config.toml)
+        → client_pool.BaiduClientPool
+            → baidu_chat.BaiduChatClient  (token, payload, SSE)
+        → tool_calling (message compact + XML tools)
 ```
 
 ### Modules
 
-| File | Role |
+| Path | Role |
 |---|---|
-| `main.py` | Flask app, config load, auth, model alias map, stream/sync response shaping |
-| `baidu_chat.py` | Reverse-engineered Baidu client: homepage token scrape, `chat_token` algorithm, conversation POST, SSE parse, cookie refresh |
-| `client_pool.py` | Multi-cookie pool: pick lowest-inflight client, optional fresh conversation per request, retry across cookies |
-| `tool_calling.py` | Message compaction, tool system prompt injection, XML `<tool_calls>` parsing |
-| `config.toml` | Cookies, server bind, API keys, context limits, cookie persistence |
-| `config/` | Captured minified JS from Baidu front-end (reference for reverse engineering; not imported at runtime) |
-| `test_server.py` | Mocks `BaiduChatClient` and exercises Flask routes + tool/auth/context paths |
+| `main.py` | Flask app, model list/map, auth, stream/sync shaping, runtime reload from admin |
+| `admin_api.py` | Admin login/JWT, config/settings/keys CRUD, SPA mount |
+| `baidu_chat.py` | Homepage token scrape, `chat_token`, conversation SSE, model wire format |
+| `client_pool.py` | Multi-cookie least-inflight pool + failover |
+| `tool_calling.py` | Prompt compaction + XML tool_calls parse |
+| `webui/` | React + Vite + Tailwind admin (light theme); build outDir `static/admin` |
+| `config.toml` | Cookies, auth, context, cookie persistence |
+| `test_server.py` | Mocked integration tests |
 
-### Baidu protocol (load-bearing details)
+### Baidu protocol (load-bearing)
 
-- Homepage `GET https://chat.baidu.com` → extract `token`/`lid` from `<script name="aiTabFrameBaseData">`.
-- `chat_token = base64("{token}|{md5(query)}|{ms_timestamp}|{lid}")-{lid}-3`
-- Chat: `POST https://chat.baidu.com/aichat/api/conversation` as SSE (`text/event-stream`).
-- Model selection is payload-driven (`usedModel.modelName`, `deepSearch`, headers like `isDeepseek`), not a separate endpoint.
-- SSE event types: `basedata`, `ping`, `message`. Text is pulled from `message.content.generator` (component-specific shapes: `markdown-yiyan`, `thinkingSteps`, etc.).
-- Thinking models use `-think` suffix or `deep_search=True` → mapped to OpenAI `reasoning_content`.
-- Timeouts are intentional anti-hang guards (homepage 10s, conversation 30s, SSE stall ~8s).
-- 401/403 (and some 400/429 auth markers) trigger cookie refresh + single retry inside the client; pool then fails over to the next cookie.
+- Homepage `GET https://chat.baidu.com` → `token`/`lid` from `<script name="aiTabFrameBaseData">`.
+- `chat_token = base64("{token}|{md5(query)}|{ms}|{lid}")-{lid}-3`
+- Chat: `POST /aichat/api/conversation` SSE.
+- Live models (2026-07 `usableModel`): `smartMode`, `DeepSeek-V4`, `DeepSeek-V4-Flash`, `DeepSeek-R1`, `ERINE-5.1`.
+- Wire `usedModel.modelFunction`: `thinkMode` is string `"0"`/`"1"` (not object); when thinkMode present, omit `internetSearch`. `deepSearch` stays `"0"`/`"1"`.
+- `isDeepseek` header is `"1"` for any selected model (live client behavior).
+- Thinking/content extracted from SSE `message` generators (`markdown-yiyan`, `thinkingSteps`, …) → OpenAI `content` / `reasoning_content`.
+
+### Admin WebUI contract
+
+Minimal admin surface used by the SPA:
+
+- `POST /admin/login` `{admin_key}` → `{success, token, expires_in}`
+- `GET /admin/verify` Bearer JWT
+- `GET/PUT /admin/settings`, `POST /admin/settings/password`
+- `GET /admin/config`, export/import, `POST/DELETE /admin/keys/...`
+- `GET /admin/version`
+- Static SPA under `/admin/` (production `base: '/admin/'`)
+
+Nav pages: **配置管理** (cookies + API keys), **API 测试**, **设置中心** (security, context, 会话独立拆分, model aliases, backup). No DeepSeek account pool / proxies / Vercel.
 
 ### OpenAI surface
 
-- Auth: optional. If `config.toml [auth].api_keys` is non-empty, every request needs `Authorization: Bearer <key>`. Empty = open (local default).
-- Context: with `fresh_conversation = true` (default), each request opens a new Baidu session; OpenAI multi-turn history is compacted locally (`max_chars` / `max_messages` / `max_message_chars`) into one prompt string.
-- Tools: when `tools` is present, a system prompt forces XML tool-call output; server parses it into OpenAI `tool_calls`. Stream mode buffers content until end when tools are enabled so partial XML is not streamed mid-call.
-- Model aliases in `main.MODEL_MAP` / `BaiduChatClient.MODEL_ALIASES` accept several names (`baidu-smart`, `baidu-deepseek`, `gpt-4`, etc.) and map to internal keys: `ernie-4.5`, `deepseek-r1`, `deepseek-v4-pro` (+ `-think`).
-
-### Config notes
-
-- Cookies: `[cookies].value` (single) or `.values` (list for pool). Empty → auto-fetch from homepage; optional persist via `[cookie_persistence] cookie_file` (default `cookies.json`, gitignored). Multi-cookie pool writes `cookies.N.json`.
-- Docker mounts `./config.toml` (ro) and `./cookies.json`.
-- `tomllib` is preferred; `tomli` is a fallback for older Python (project itself requires 3.13).
+- Auth optional: non-empty `[auth].api_keys` requires `Authorization: Bearer`; wrong key → **401**.
+- Models: `deepseek-r1`, `deepseek-v4-pro[-nothinking]`, `deepseek-v4-flash[-nothinking]`, `ernie-5.1`/`ERINE-5.1`[+`-nothinking`], `smartmode`, `smartmode-thinking`.
+- `fresh_conversation` (default true) opens a new Baidu session per request; multi-turn history compacted locally.
 
 ## When changing reverse-engineered behavior
 
-Baidu front-end/API can change without notice. Prefer validating against live `chat.baidu.com` (or captured assets under `config/`) before rewriting token generation, payload fields, or SSE content extraction. Keep README model tables and `MODEL_LIST`/`MODEL_MAP` in `main.py` aligned when adding models.
+Validate against live `chat.baidu.com` / `usableModel` before changing token algorithm, `usedModel` shape, or SSE extraction. Keep README model tables and `MODEL_LIST`/`MODEL_MAP`/`BaiduChatClient.MODELS` aligned.
