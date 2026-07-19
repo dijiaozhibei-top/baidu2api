@@ -223,9 +223,17 @@ def _check_auth():
         return _error("Missing Authorization bearer token", 401, "unauthorized")
 
     token = auth_header[len(prefix):].strip()
-    if token not in api_keys:
-        return _error("Invalid API key", 401, "unauthorized")
-    return None
+    # Accept either a configured OpenAI API key, or a valid admin JWT
+    # (admin WebUI loads /v1/models via authFetch with the admin token).
+    if token in api_keys:
+        return None
+    try:
+        from admin_api import admin_state
+        if admin_state.verify_token(token):
+            return None
+    except Exception:
+        pass
+    return _error("Invalid API key", 401, "unauthorized")
 
 
 @app.before_request

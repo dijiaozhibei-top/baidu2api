@@ -417,6 +417,15 @@ def require_admin(fn):
 
 
 def register_admin_routes(app: Flask):
+    import mimetypes
+
+    # Windows/Python may map .js to text/plain; browsers reject ES modules with wrong MIME.
+    mimetypes.add_type("application/javascript", ".js")
+    mimetypes.add_type("application/javascript", ".mjs")
+    mimetypes.add_type("text/css", ".css")
+    mimetypes.add_type("image/svg+xml", ".svg")
+    mimetypes.add_type("application/wasm", ".wasm")
+
     static_admin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "admin")
 
     @app.route("/admin/login", methods=["POST"])
@@ -547,11 +556,76 @@ def register_admin_routes(app: Flask):
 
     @app.route("/admin/<path:asset>", methods=["GET"])
     def admin_assets(asset: str):
-        # API paths already registered above; only static assets fall through here if unmatched.
-        # Flask matches more specific routes first.
-        file_path = os.path.join(static_admin, asset)
+        from flask import Response
+
+        root = os.path.abspath(static_admin)
+        file_path = os.path.abspath(os.path.join(static_admin, asset))
+        if not (file_path == root or file_path.startswith(root + os.sep)):
+            return jsonify({"detail": "not found"}), 404
         if os.path.isfile(file_path):
+            ext = os.path.splitext(file_path)[1].lower()
+            mime_map = {
+                ".js": "application/javascript; charset=utf-8",
+                ".mjs": "application/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8",
+                ".svg": "image/svg+xml",
+                ".json": "application/json",
+                ".map": "application/json",
+                ".woff": "font/woff",
+                ".woff2": "font/woff2",
+                ".ttf": "font/ttf",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".ico": "image/x-icon",
+                ".html": "text/html; charset=utf-8",
+            }
+            mime = mime_map.get(ext)
+            # Always stream JS ourselves so Content-Type cannot be rewritten to text/plain.
+            if ext in (".js", ".mjs", ".css", ".svg", ".json", ".map", ".html"):
+                with open(file_path, "rb") as f:
+                    data = f.read()
+                return Response(
+                    data,
+                    mimetype=mime or "application/octet-stream",
+                    headers={"Cache-Control": "no-cache", "X-Baidu2-Static": "1"},
+                )
             return send_from_directory(static_admin, asset)
+        index = os.path.join(static_admin, "index.html")
+        if os.path.exists(index):
+            return send_from_directory(static_admin, "index.html")
+        return jsonify({"detail": "not found"}), 404
+        if os.path.isfile(file_path):
+            # Force correct MIME types. On Windows, mimetypes often maps .js → text/plain,
+            # and browsers refuse to execute ES modules served as text/plain.
+            ext = os.path.splitext(file_path)[1].lower()
+            mime = {
+                ".js": "application/javascript; charset=utf-8",
+                ".mjs": "application/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8",
+                ".svg": "image/svg+xml",
+                ".json": "application/json",
+                ".map": "application/json",
+                ".woff": "font/woff",
+                ".woff2": "font/woff2",
+                ".ttf": "font/ttf",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".ico": "image/x-icon",
+                ".html": "text/html; charset=utf-8",
+            }.get(ext, None)
+            resp = send_from_directory(static_admin, asset)
+            if mime:
+                resp.headers["Content-Type"] = mime
+            resp.headers["X-Baidu2-Static"] = "1"
+            # Werkzeug may re-sniff; force via direct Response for js
+            if ext in (".js", ".mjs"):
+                from flask import Response
+                with open(file_path, "rb") as f:
+                    data = f.read()
+                return Response(data, mimetype="application/javascript; charset=utf-8", headers={"X-Baidu2-Static":"1","Cache-Control":"no-cache"})
+            return resp
         # SPA fallback
         index = os.path.join(static_admin, "index.html")
         if os.path.exists(index):
