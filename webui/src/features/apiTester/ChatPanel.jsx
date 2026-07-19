@@ -167,7 +167,7 @@ export default function ChatPanel({
                     </div>
                 )}
                 {attachmentAccountIds.length > 1 && (
-                    <div className="max-w-4xl mx-auto mb-3 text-[11px] text-amber-600">
+                    <div className="max-w-4xl mx-auto mb-3 text-[11px] text-blue-600">
                         {t('apiTester.fileAccountConflict')}
                     </div>
                 )}

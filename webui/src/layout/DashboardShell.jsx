@@ -1,7 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-    LayoutDashboard,
     Settings as SettingsIcon,
     LogOut,
     Menu,
@@ -116,9 +115,7 @@ export default function DashboardShell({ token, onLogout, config, fetchConfig, s
             )}>
                 <div className="p-6">
                     <div className="flex items-center gap-2.5 font-bold text-xl text-foreground tracking-tight">
-                        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
-                            <LayoutDashboard className="w-5 h-5" />
-                        </div>
+                        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 font-bold text-sm tracking-tight">B</div>
                         <span>Baidu2API</span>
                     </div>
                     <div className="flex items-center justify-between mt-2">
@@ -184,9 +181,7 @@ export default function DashboardShell({ token, onLogout, config, fetchConfig, s
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                 <header className="lg:hidden h-14 flex items-center justify-between px-4 border-b border-border bg-card">
                     <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-primary-foreground text-[10px]">
-                            <LayoutDashboard className="w-3.5 h-3.5" />
-                        </div>
+                        <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-primary-foreground text-[11px] font-bold">B</div>
                         <span className="font-semibold text-sm">Baidu2API</span>
                     </div>
                     <div className="flex items-center gap-2">

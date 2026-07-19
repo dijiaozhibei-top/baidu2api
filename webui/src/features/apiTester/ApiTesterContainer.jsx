@@ -66,7 +66,7 @@ function decorateModel(t, modelID) {
         name: modelID,
         icon: isPro ? 'Cpu' : 'MessageSquare',
         desc: describeModel(t, modelID),
-        color: isPro ? 'text-amber-600' : 'text-amber-500',
+        color: isPro ? 'text-blue-600' : 'text-blue-500',
     }
 }
 

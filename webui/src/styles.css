@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Light theme - Zinc & Amber (baidu2api) */
+/* Light theme - Zinc & Blue (baidu2api) */
 :root {
   --color-background: hsl(0 0% 100%);
   --color-foreground: hsl(240 10% 3.9%);
@@ -13,7 +13,7 @@
   --color-popover: hsl(0 0% 100%);
   --color-popover-foreground: hsl(240 10% 3.9%);
 
-  --color-primary: hsl(45 93% 47%);
+  --color-primary: hsl(217 91% 50%);
   --color-primary-foreground: hsl(0 0% 100%);
 
   --color-secondary: hsl(240 4.8% 95.9%);
@@ -30,7 +30,7 @@
 
   --color-border: hsl(240 5.9% 90%);
   --color-input: hsl(240 5.9% 90%);
-  --color-ring: hsl(45 93% 47%);
+  --color-ring: hsl(217 91% 50%);
 
   --radius: 0.5rem;
 }

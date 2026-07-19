@@ -179,7 +179,7 @@ export default function ConfigPanel({
                         {customKeyActive && (
                             <p className={clsx(
                                 "text-[11px] mt-1",
-                                customKeyManaged ? "text-emerald-600" : "text-amber-600"
+                                customKeyManaged ? "text-emerald-600" : "text-blue-600"
                             )}>
                                 {customKeyManaged ? t('apiTester.modeManaged') : t('apiTester.modeDirect')}
                             </p>

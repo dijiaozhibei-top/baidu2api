@@ -30,11 +30,11 @@ export default function AutoDeleteSection({ t, form, setForm }) {
                     <option value="all">{t('settings.autoDeleteAll')}</option>
                 </select>
             </div>
-            <p className={`text-xs ${mode === 'none' ? 'text-muted-foreground' : 'text-amber-500'}`}>
+            <p className={`text-xs ${mode === 'none' ? 'text-muted-foreground' : 'text-blue-500'}`}>
                 {t(descKey)}
             </p>
             {mode !== 'none' && (
-                <p className="text-xs text-amber-500 flex items-center gap-1">
+                <p className="text-xs text-blue-500 flex items-center gap-1">
                     {t('settings.autoDeleteWarning')}
                 </p>
             )}
