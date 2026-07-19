@@ -166,6 +166,25 @@ cd webui && npm run dev
 python test_server.py
 ```
 
+## 交流群
+
+欢迎加入 QQ 交流群反馈问题、分享部署经验：
+
+- 群名称：baidu2api 项目交流群
+- 群号：`511510364`
+- 加群链接：[点击加入](https://qm.qq.com/q/Rrv76AeZmG)
+
+![QQ 交流群二维码](docs/assets/qq-group.jpg)
+
+## 致谢
+
+感谢以下项目提供的思路与参考：
+
+- [baiduchat2api](https://github.com/XxxXTeam/baiduchat2api) — 百度文心助手逆向与 OpenAI 兼容 API 的早期实践
+- [baidu2api](https://github.com/dijiaozhibei-top/baidu2api) — 本项目的持续迭代与社区反馈
+
+也感谢所有提交 Issue / PR 与在交流群中提供帮助的朋友。
+
 ## License
 
 仅供学习交流。使用本项目即表示你自行承担全部风险。

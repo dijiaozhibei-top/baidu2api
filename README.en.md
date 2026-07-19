@@ -132,3 +132,22 @@ python main.py --port 8000
 cd webui && npm run dev   # proxies to :8000
 python test_server.py
 ```
+
+## Community
+
+Join the QQ group for discussion and support:
+
+- Group name: baidu2api project community
+- Group ID: `511510364`
+- Invite link: [Join QQ group](https://qm.qq.com/q/Rrv76AeZmG)
+
+![QQ group QR code](docs/assets/qq-group.jpg)
+
+## Acknowledgements
+
+Thanks to the following projects for inspiration and reference:
+
+- [baiduchat2api](https://github.com/XxxXTeam/baiduchat2api) — early reverse-engineering work turning Baidu Wenxin chat into an OpenAI-compatible API
+- [baidu2api](https://github.com/dijiaozhibei-top/baidu2api) — ongoing iteration and community feedback for this project
+
+Thanks also to everyone who filed issues, submitted PRs, or helped in the community group.
